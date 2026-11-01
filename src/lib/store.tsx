@@ -15,6 +15,7 @@ import { getXpForNextLevel, MATCH_XP } from './levels';
 import { supabase } from './supabaseClient';
 
 export const MASTER_ADMIN_EMAILS: string[] = [
+  'runekamprolf@gmail.com',
   'rune.kamprolf@otto.de',
   (process.env.NEXT_PUBLIC_ADMIN_EMAIL || '').toLowerCase().trim(),
 ].filter(Boolean);
@@ -62,7 +63,7 @@ interface StoreContextType {
 
 const StoreContext = createContext<StoreContextType | null>(null);
 
-const STORAGE_KEY = 'bls_kicker_app_state_v3';
+const STORAGE_KEY = 'bls_kicker_app_state_v4';
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [players, setPlayers] = useState<Player[]>(INITIAL_PLAYERS);
@@ -394,6 +395,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     // Check whitelist
     const isWhitelisted =
       players.length === 0 || // First user is always permitted to initialize the league
+      MASTER_ADMIN_EMAILS.some((adm) => adm.toLowerCase() === email) ||
       whitelist.some((w) => {
         const p = w.pattern.toLowerCase().trim();
         if (p.startsWith('@')) {

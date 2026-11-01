@@ -27,7 +27,7 @@ export const INITIAL_WHITELIST: WhitelistEntry[] = [
   },
   {
     id: 'wl_admin',
-    pattern: 'rune.kamprolf@otto.de',
+    pattern: 'runekamprolf@gmail.com',
     addedBy: 'system',
     createdAt: '2026-11-01',
   },
