@@ -64,7 +64,18 @@ Eine moderne, hochwertige und mobiloptimierte Web-App (PWA) für geschlossene Ti
 - Der GitHub-Actions-Workflow [`supabase-migrate.yml`](.github/workflows/supabase-migrate.yml) spielt neue Migrationen automatisch auf das verknüpfte Projekt ein.
 - Die produktive Autorisierung erfolgt serverseitig über Supabase-RLS, Trigger und Security-Definer-Funktionen; Client-Zustände oder LocalStorage vergeben keine Rechte.
 - Match-RPCs lehnen gesperrte Spieler, unbekannte Profile und doppelte Spieler-IDs in Teams serverseitig ab.
+- Beim Löschen, Annullieren oder Korrigieren gewerteter Spiele werden ELO (inklusive nachfolgender Spielwertungen), Ligapunkte, Bilanzen, XP, Level, Siegesserie und ELO-Verlauf chronologisch aus den verbleibenden gewerteten Spielen neu aufgebaut. Strittige, bereits gewertete Spiele zählen bis zur Annullierung weiter; ungewertete Spiele zählen nicht.
+- Die Migration `20261101210000_rebuild_match_stats_on_removal.sql` repariert bestehende Statistiken einmalig und übernimmt ältere bestätigte bzw. mit ELO-Änderungen gespeicherte Spiele als gewertet. Ausgangswerte sind ELO 1000 je Modus, Level 1 und 0 XP (erste Levelschwelle: 150 XP); manuell gesetzte Statistikwerte werden ersetzt, Rollen und Abzeichen bleiben unverändert.
 - Für eine leere Übergabe-Datenbank nur Datensätze löschen, niemals Tabellen, RLS oder Funktionen. Owner-Mail und erlaubte Domain anschließend in der Whitelist hinterlegen und die Owner-Rolle einmalig serverseitig setzen.
+
+Die SQL-Regressionen laufen auf einer **leeren, wegwerfbaren PostgreSQL-Datenbank** mit einem Superuser (nicht auf Supabase/Produktion):
+
+```bash
+psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/match_stats_bootstrap.sql
+psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/match_stats_removal.sql
+```
+
+Der Bootstrap simuliert Supabase-Auth und spielt Schema sowie bisherige Migrationen ein. Der Regressionstest legt Altdaten an, wendet die neue Migration an und prüft Annullierung, Mehrfachlöschung, Ergebnisänderungen, Berechtigungen und Levelgrenzen.
 
 ### Sicherheitsstatus
 
