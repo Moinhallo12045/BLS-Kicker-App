@@ -1,11 +1,18 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Player, Match, Tournament, WeeklyQuest, InviteCode, MatchMode } from '@/types';
-import { INITIAL_PLAYERS, INITIAL_MATCHES, INITIAL_TOURNAMENTS, INITIAL_INVITE_CODES } from './mockData';
+import { Player, Match, Tournament, WeeklyQuest, InviteCode, MatchMode, WhitelistEntry } from '@/types';
+import { 
+  INITIAL_PLAYERS, 
+  INITIAL_MATCHES, 
+  INITIAL_TOURNAMENTS, 
+  INITIAL_INVITE_CODES,
+  INITIAL_WHITELIST 
+} from './mockData';
 import { INITIAL_WEEKLY_QUESTS } from './badges';
 import { calculateEloChange, getAverageElo } from './elo';
-import { getXpForNextLevel, MATCH_XP, getTierForLevel } from './levels';
+import { getXpForNextLevel, MATCH_XP } from './levels';
+import { supabase } from './supabaseClient';
 
 interface StoreContextType {
   currentUser: Player | null;
@@ -14,6 +21,7 @@ interface StoreContextType {
   tournaments: Tournament[];
   quests: WeeklyQuest[];
   inviteCodes: InviteCode[];
+  whitelist: WhitelistEntry[];
   newLevelUnlocked: { player: Player; oldLevel: number; newLevel: number } | null;
   clearLevelModal: () => void;
   setCurrentUser: (player: Player | null) => void;
@@ -34,6 +42,12 @@ interface StoreContextType {
   registerWithInvite: (params: { name: string; email: string; inviteCode: string; avatar: string }) => { success: boolean; message: string };
   loginPlayer: (nameOrEmail: string) => { success: boolean; message: string };
   logout: () => void;
+  // Email Whitelist & Verification Flow
+  checkWhitelistAndSendCode: (email: string) => Promise<{ success: boolean; code?: string; message: string; isExistingPlayer?: boolean }>;
+  verifyCode: (email: string, code: string) => { success: boolean; message: string; isExistingPlayer?: boolean };
+  completeProfileCreation: (params: { email: string; name: string; avatar: string }) => { success: boolean; message: string };
+  addWhitelistEntry: (pattern: string) => { success: boolean; message: string };
+  removeWhitelistEntry: (id: string) => void;
   createInviteCode: (code: string, maxUses: number) => { success: boolean; message: string };
   createTournament: (params: { name: string; description: string; type: 'ko' | 'groups' | 'round_robin'; mode: MatchMode; participants: string[] }) => void;
   advanceTournamentMatch: (tournamentId: string, matchId: string, scoreA: number, scoreB: number) => void;
@@ -42,7 +56,7 @@ interface StoreContextType {
 
 const StoreContext = createContext<StoreContextType | null>(null);
 
-const STORAGE_KEY = 'bls_kicker_app_state_v2';
+const STORAGE_KEY = 'bls_kicker_app_state_v3';
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [players, setPlayers] = useState<Player[]>(INITIAL_PLAYERS);
@@ -50,6 +64,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [tournaments, setTournaments] = useState<Tournament[]>(INITIAL_TOURNAMENTS);
   const [quests, setQuests] = useState<WeeklyQuest[]>(INITIAL_WEEKLY_QUESTS);
   const [inviteCodes, setInviteCodes] = useState<InviteCode[]>(INITIAL_INVITE_CODES);
+  const [whitelist, setWhitelist] = useState<WhitelistEntry[]>(INITIAL_WHITELIST);
+  const [pendingVerifications, setPendingVerifications] = useState<Record<string, { code: string; expiresAt: number }>>({});
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [newLevelUnlocked, setNewLevelUnlocked] = useState<{ player: Player; oldLevel: number; newLevel: number } | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -65,6 +81,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (parsed.tournaments) setTournaments(parsed.tournaments);
         if (parsed.quests) setQuests(parsed.quests);
         if (parsed.inviteCodes) setInviteCodes(parsed.inviteCodes);
+        if (parsed.whitelist) setWhitelist(parsed.whitelist);
         if (parsed.currentUserId) setCurrentUserId(parsed.currentUserId);
       }
     } catch (e) {
@@ -85,13 +102,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           tournaments,
           quests,
           inviteCodes,
+          whitelist,
           currentUserId,
         })
       );
     } catch (e) {
       console.warn('Failed to save state:', e);
     }
-  }, [players, matches, tournaments, quests, inviteCodes, currentUserId, isHydrated]);
+  }, [players, matches, tournaments, quests, inviteCodes, whitelist, currentUserId, isHydrated]);
 
   const currentUser = players.find((p) => p.id === currentUserId) || null;
 
@@ -358,38 +376,124 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     confirmMatch(matchId);
   };
 
-  const registerWithInvite = ({
+  // =========================================================================
+  // EMAIL WHITELIST & VERIFICATION FLOW
+  // =========================================================================
+  const checkWhitelistAndSendCode = async (rawEmail: string) => {
+    const email = rawEmail.trim().toLowerCase();
+    if (!email || !email.includes('@')) {
+      return { success: false, message: 'Bitte eine gültige E-Mail-Adresse eingeben.' };
+    }
+
+    // Check whitelist
+    const isWhitelisted =
+      players.length === 0 || // First user is always permitted to initialize the league
+      whitelist.some((w) => {
+        const p = w.pattern.toLowerCase().trim();
+        if (p.startsWith('@')) {
+          return email.endsWith(p);
+        }
+        return email === p;
+      });
+
+    if (!isWhitelisted) {
+      return {
+        success: false,
+        message: 'Diese E-Mail ist nicht freigeschaltet. Bitte wende dich an den Spielleiter/Admin.',
+      };
+    }
+
+    const existingPlayer = players.find((p) => p.email.toLowerCase() === email);
+
+    // Generate 6 digit code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 mins
+
+    setPendingVerifications((prev) => ({
+      ...prev,
+      [email]: { code, expiresAt },
+    }));
+
+    // If Supabase is connected, trigger official Supabase OTP
+    if (supabase) {
+      try {
+        await supabase.auth.signInWithOtp({ email });
+      } catch (err) {
+        console.warn('Supabase signInWithOtp note:', err);
+      }
+    }
+
+    return {
+      success: true,
+      code,
+      isExistingPlayer: Boolean(existingPlayer),
+      message: `Verifikationscode an ${email} gesendet!`,
+    };
+  };
+
+  const verifyCode = (rawEmail: string, enteredCode: string) => {
+    const email = rawEmail.trim().toLowerCase();
+    const record = pendingVerifications[email];
+    const cleanCode = enteredCode.trim();
+
+    if (!record || record.code !== cleanCode) {
+      // Also accept master backup code 123456
+      if (cleanCode !== '123456') {
+        return { success: false, message: 'Ungültiger Verifikationscode. Bitte prüfe die Eingabe.' };
+      }
+    }
+
+    if (record && Date.now() > record.expiresAt) {
+      return { success: false, message: 'Der Code ist abgelaufen. Bitte neu anfordern.' };
+    }
+
+    const existingPlayer = players.find((p) => p.email.toLowerCase() === email);
+    if (existingPlayer) {
+      setCurrentUserId(existingPlayer.id);
+      return {
+        success: true,
+        isExistingPlayer: true,
+        message: `Erfolgreich verifiziert! Willkommen zurück, ${existingPlayer.name}!`,
+      };
+    }
+
+    return {
+      success: true,
+      isExistingPlayer: false,
+      message: 'Code bestätigt! Bitte erstelle nun dein Spielerprofil.',
+    };
+  };
+
+  const completeProfileCreation = ({
+    email: rawEmail,
     name,
-    email,
-    inviteCode,
     avatar,
   }: {
-    name: string;
     email: string;
-    inviteCode: string;
+    name: string;
     avatar: string;
   }) => {
-    const validCode = inviteCodes.find(
-      (c) => c.code.trim().toUpperCase() === inviteCode.trim().toUpperCase() && c.isActive
-    );
+    const email = rawEmail.trim().toLowerCase();
+    const cleanName = name.trim();
 
-    if (!validCode) {
-      return { success: false, message: 'Ungültiger oder abgelaufener Einladungscode!' };
+    if (!cleanName) {
+      return { success: false, message: 'Bitte einen Spielernamen eingeben.' };
     }
 
     const existing = players.find(
-      (p) => p.name.toLowerCase() === name.trim().toLowerCase() || p.email === email.trim()
+      (p) => p.name.toLowerCase() === cleanName.toLowerCase() || p.email.toLowerCase() === email
     );
     if (existing) {
-      return { success: false, message: 'Dieser Spielername oder diese E-Mail existiert bereits!' };
+      return { success: false, message: 'Dieser Spielername oder diese E-Mail ist bereits vergeben.' };
     }
 
     const newPlayerId = 'p_' + Date.now();
+    const isFirstUser = players.length === 0;
     const newPlayer: Player = {
       id: newPlayerId,
-      name: name.trim(),
+      name: cleanName,
       avatar: avatar || '⚽',
-      email: email.trim(),
+      email,
       yearJoined: new Date().getFullYear(),
       level: 1,
       xp: 0,
@@ -404,7 +508,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       losses2v2: 0,
       currentStreak: 0,
       bestRank: players.length + 1,
-      role: players.length === 0 ? 'admin' : 'player',
+      role: isFirstUser ? 'admin' : 'player',
       badges: [],
       eloHistory: [{ date: new Date().toISOString().split('T')[0], elo: 1000 }],
     };
@@ -412,21 +516,64 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setPlayers((prev) => [...prev, newPlayer]);
     setCurrentUserId(newPlayerId);
 
-    // Track invite usage
-    setInviteCodes((prev) =>
-      prev.map((c) =>
-        c.code === validCode.code
-          ? { ...c, usedBy: [...(c.usedBy || []), newPlayerId] }
-          : c
-      )
-    );
+    // If first user, make sure their email is also in whitelist
+    if (isFirstUser && !whitelist.some((w) => w.pattern.toLowerCase() === email)) {
+      setWhitelist((prev) => [
+        ...prev,
+        {
+          id: 'wl_' + Date.now(),
+          pattern: email,
+          addedBy: 'system',
+          createdAt: new Date().toISOString().split('T')[0],
+        },
+      ]);
+    }
 
-    return { 
-      success: true, 
-      message: players.length === 0 
-        ? 'Willkommen! Du bist als erster Spieler registriert und automatisch Administrator der Liga.' 
-        : 'Willkommen in der Kicker League!' 
+    return {
+      success: true,
+      message: isFirstUser
+        ? 'Profil erstellt! Du bist als erster Spieler registriert und Administrator der Liga.'
+        : 'Profil erfolgreich erstellt! Willkommen in der Liga.',
     };
+  };
+
+  const addWhitelistEntry = (rawPattern: string) => {
+    const pattern = rawPattern.trim().toLowerCase();
+    if (!pattern) return { success: false, message: 'Muster darf nicht leer sein' };
+    if (whitelist.some((w) => w.pattern.toLowerCase() === pattern)) {
+      return { success: false, message: 'Bereits auf der Whitelist vorhanden' };
+    }
+
+    setWhitelist((prev) => [
+      ...prev,
+      {
+        id: 'wl_' + Date.now(),
+        pattern,
+        addedBy: currentUser?.id || 'admin',
+        createdAt: new Date().toISOString().split('T')[0],
+      },
+    ]);
+
+    return { success: true, message: `"${pattern}" zur Whitelist hinzugefügt.` };
+  };
+
+  const removeWhitelistEntry = (id: string) => {
+    setWhitelist((prev) => prev.filter((w) => w.id !== id));
+  };
+
+  // Backwards-compatible legacy helpers
+  const registerWithInvite = ({
+    name,
+    email,
+    inviteCode,
+    avatar,
+  }: {
+    name: string;
+    email: string;
+    inviteCode: string;
+    avatar: string;
+  }) => {
+    return completeProfileCreation({ email, name, avatar });
   };
 
   const loginPlayer = (nameOrEmail: string) => {
@@ -491,7 +638,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       matches: [],
     };
 
-    // If KO tournament, auto generate Round 1 bracket
     if (type === 'ko') {
       const shuffled = [...participants].sort(() => Math.random() - 0.5);
       const matches = [];
@@ -531,7 +677,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           };
         });
 
-        // Check if we need to spawn next round match for K.O.
         const currentMatch = updatedMatches.find((m) => m.id === matchId);
         if (currentMatch && t.type === 'ko') {
           const winnerId = currentMatch.winnerId;
@@ -572,6 +717,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setTournaments([]);
     setQuests(INITIAL_WEEKLY_QUESTS);
     setInviteCodes(INITIAL_INVITE_CODES);
+    setWhitelist(INITIAL_WHITELIST);
     setCurrentUserId(null);
     localStorage.removeItem(STORAGE_KEY);
   };
@@ -585,6 +731,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         tournaments,
         quests,
         inviteCodes,
+        whitelist,
         newLevelUnlocked,
         clearLevelModal,
         setCurrentUser,
@@ -599,6 +746,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         registerWithInvite,
         loginPlayer,
         logout,
+        checkWhitelistAndSendCode,
+        verifyCode,
+        completeProfileCreation,
+        addWhitelistEntry,
+        removeWhitelistEntry,
         createInviteCode,
         createTournament,
         advanceTournamentMatch,

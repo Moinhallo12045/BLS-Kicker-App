@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useStore } from '@/lib/store';
-import { ShieldCheck, AlertTriangle, Key, Users, Check, X, Edit2, Trash2 } from 'lucide-react';
+import { ShieldCheck, AlertTriangle, Key, Users, Check, X, Edit2, Trash2, Mail, Plus } from 'lucide-react';
 import { PlayerRole } from '@/types';
 
 export function AdminView() {
@@ -12,11 +12,15 @@ export function AdminView() {
     matches, 
     inviteCodes, 
     createInviteCode, 
-    adminResolveDispute 
+    adminResolveDispute,
+    whitelist,
+    addWhitelistEntry,
+    removeWhitelistEntry
   } = useStore();
 
   const [newCode, setNewCode] = useState('');
   const [maxUses, setMaxUses] = useState(50);
+  const [newWhitelistPattern, setNewWhitelistPattern] = useState('');
   const [notification, setNotification] = useState<string | null>(null);
 
   // Dispute resolution form state
@@ -252,6 +256,71 @@ export function AdminView() {
                 </span>
                 <span className="text-[10px] text-emerald-400/60 ml-1">eingelöst</span>
               </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 3. E-Mail Whitelist (Zugangsberechtigungen) */}
+      <div className="felt-card p-5 space-y-4">
+        <div>
+          <h3 className="font-display text-lg font-bold text-white flex items-center gap-2">
+            <Mail className="w-5 h-5 text-amber-400" />
+            E-Mail Whitelist ({whitelist.length} Einträge)
+          </h3>
+          <p className="text-xs text-emerald-300/80">
+            Nur Spieler mit diesen E-Mail-Adressen oder Domains erhalten einen Verifikationscode.
+          </p>
+        </div>
+
+        {/* Add Whitelist Pattern Form */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!newWhitelistPattern.trim()) return;
+            const res = addWhitelistEntry(newWhitelistPattern);
+            setNotification(res.message);
+            setNewWhitelistPattern('');
+            setTimeout(() => setNotification(null), 3000);
+          }}
+          className="flex gap-2"
+        >
+          <input
+            type="text"
+            required
+            value={newWhitelistPattern}
+            onChange={(e) => setNewWhitelistPattern(e.target.value.toLowerCase())}
+            placeholder="z.B. @otto.de oder kollege@firma.de"
+            className="flex-1 bg-emerald-950/80 border border-emerald-800 rounded-xl px-3 py-2 text-xs text-white placeholder-emerald-400/50 focus:outline-none focus:border-amber-400 font-mono"
+          />
+          <button
+            type="submit"
+            className="py-2 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs shadow flex items-center gap-1"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Freischalten
+          </button>
+        </form>
+
+        {/* Whitelist List */}
+        <div className="divide-y divide-emerald-900/30 max-h-48 overflow-y-auto pr-1">
+          {whitelist.map((w) => (
+            <div key={w.id} className="py-2 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-bold text-emerald-300 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-700/50">
+                  {w.pattern}
+                </span>
+                <span className="text-[10px] text-emerald-400/60">
+                  {w.pattern.startsWith('@') ? 'Ganze Domain' : 'Einzelne E-Mail'}
+                </span>
+              </div>
+              <button
+                onClick={() => removeWhitelistEntry(w.id)}
+                className="text-red-400 hover:text-red-300 p-1 rounded hover:bg-red-950/40"
+                title="Von Whitelist entfernen"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
             </div>
           ))}
         </div>

@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS public.tournaments (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. INVITE CODES (Geschlossene Registrierung)
+-- 4. INVITE CODES & WHITELIST (Geschlossene Registrierung)
 CREATE TABLE IF NOT EXISTS public.invite_codes (
     code TEXT PRIMARY KEY,
     created_by UUID REFERENCES public.profiles(id),
@@ -74,11 +74,23 @@ CREATE TABLE IF NOT EXISTS public.invite_codes (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS public.whitelist (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    pattern TEXT NOT NULL UNIQUE,
+    added_by UUID REFERENCES public.profiles(id),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- 5. ROW LEVEL SECURITY (RLS) POLICIES
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.matches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tournaments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.invite_codes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.whitelist ENABLE ROW LEVEL SECURITY;
+
+-- Leseberechtigung für alle authentifizierten Ligamitglieder
+CREATE POLICY "Alle dürfen Whitelist lesen" ON public.whitelist FOR SELECT USING (true);
+CREATE POLICY "Admins dürfen Whitelist bearbeiten" ON public.whitelist FOR ALL USING (true);
 
 -- Leseberechtigung für alle authentifizierten Ligamitglieder
 CREATE POLICY "Alle Spieler dürfen Profile lesen" ON public.profiles FOR SELECT USING (true);

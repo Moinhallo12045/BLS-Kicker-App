@@ -100,3 +100,11 @@ export interface InviteCode {
   maxUses: number;
   isActive: boolean;
 }
+
+export interface WhitelistEntry {
+  id: string;
+  pattern: string; // specific email e.g. "alex@firma.de" or domain e.g. "@otto.de"
+  addedBy: string;
+  createdAt: string;
+}
+

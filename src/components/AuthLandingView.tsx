@@ -1,69 +1,113 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useStore } from '@/lib/store';
-import { Key, UserCheck, Sparkles, Trophy, Swords, Shield, AlertCircle, ArrowRight } from 'lucide-react';
+import { 
+  Mail, 
+  KeyRound, 
+  UserCheck, 
+  Sparkles, 
+  Trophy, 
+  Swords, 
+  Shield, 
+  AlertCircle, 
+  CheckCircle2, 
+  ArrowRight,
+  RefreshCw,
+  Edit2
+} from 'lucide-react';
 
 const AVATAR_LIST = ['⚽', '🎯', '🦁', '👑', '🔥', '⚡', '🦅', '🎱', '🚀', '⚔️', '🎲', '⚓'];
 
+type AuthStep = 'email' | 'verify' | 'profile';
+
 export function AuthLandingView() {
-  const { players, registerWithInvite, loginPlayer } = useStore();
-  const [tab, setTab] = useState<'register' | 'login'>(players.length === 0 ? 'register' : 'login');
+  const { 
+    checkWhitelistAndSendCode, 
+    verifyCode, 
+    completeProfileCreation,
+    whitelist 
+  } = useStore();
 
-  // Register state
-  const [regCode, setRegCode] = useState('');
-  const [regName, setRegName] = useState('');
-  const [regEmail, setRegEmail] = useState('');
-  const [regAvatar, setRegAvatar] = useState('⚽');
+  const [step, setStep] = useState<AuthStep>('email');
+  const [email, setEmail] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [sentCodePreview, setSentCodePreview] = useState<string | null>(null);
 
-  // Login state
-  const [loginInput, setLoginInput] = useState('');
+  // Profile setup fields
+  const [name, setName] = useState('');
+  const [avatar, setAvatar] = useState('⚽');
 
   // Status feedback
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Auto-detect ?invite= parameter from URL
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const inviteParam = params.get('invite');
-      if (inviteParam) {
-        setRegCode(inviteParam.toUpperCase());
-        setTab('register');
-      }
-    }
-  }, []);
-
-  const handleRegister = (e: React.FormEvent) => {
+  // STEP 1: Email eingeben & gegen Whitelist prüfen
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMessage(null);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setIsLoading(true);
 
-    const res = registerWithInvite({
-      name: regName,
-      email: regEmail,
-      inviteCode: regCode,
-      avatar: regAvatar,
+    const res = await checkWhitelistAndSendCode(email);
+    setIsLoading(false);
+
+    if (!res.success) {
+      setErrorMsg(res.message);
+      return;
+    }
+
+    if (res.code) {
+      setSentCodePreview(res.code);
+    }
+    setSuccessMsg(res.message);
+    setStep('verify');
+  };
+
+  // STEP 2: Verifikationscode eingeben & prüfen
+  const handleVerifySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    const res = verifyCode(email, verificationCode);
+    if (!res.success) {
+      setErrorMsg(res.message);
+      return;
+    }
+
+    // Wenn der Spieler bereits existiert, wurde er im Store direkt eingeloggt!
+    if (res.isExistingPlayer) {
+      setSuccessMsg(res.message);
+      return;
+    }
+
+    // Wenn neuer Spieler: weiter zum Profil-Anlegen (Step 3)
+    setSuccessMsg('E-Mail erfolgreich bestätigt! Bitte richte dein Profil ein.');
+    setStep('profile');
+  };
+
+  // STEP 3: Profil anlegen (Spielername & Avatar)
+  const handleProfileSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+
+    const res = completeProfileCreation({
+      email,
+      name,
+      avatar,
     });
 
     if (!res.success) {
-      setErrorMessage(res.message);
-    }
-  };
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-
-    const res = loginPlayer(loginInput);
-    if (!res.success) {
-      setErrorMessage(res.message);
+      setErrorMsg(res.message);
     }
   };
 
   return (
     <div className="min-h-screen flex flex-col justify-between px-4 py-8 max-w-md mx-auto">
       {/* Brand Hero */}
-      <div className="text-center pt-4 pb-6 space-y-3">
+      <div className="text-center pt-2 pb-5 space-y-2">
         <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-br from-amber-500 via-amber-600 to-amber-800 p-1 shadow-[0_0_35px_rgba(245,158,11,0.35)] flex items-center justify-center">
           <span className="text-4xl">⚽</span>
         </div>
@@ -76,75 +120,169 @@ export function AuthLandingView() {
           <h1 className="font-display text-4xl font-extrabold text-white tracking-tight mt-1">
             KICKER LEAGUE
           </h1>
-          <p className="text-xs text-emerald-300/80 mt-1 max-w-xs mx-auto">
-            Die geschlossene, digitale Tischkicker-Liga mit ELO-System, Turniermodus und Leveling.
+          <p className="text-xs text-emerald-300/80 mt-0.5 max-w-xs mx-auto">
+            Geschlossene digitale Tischkicker-Liga mit ELO-System und Turniermodus.
           </p>
         </div>
       </div>
 
       {/* Main Authentication Card */}
       <div className="wood-panel p-5 relative shadow-2xl">
-        {/* Tab Switcher */}
-        <div className="grid grid-cols-2 gap-1.5 bg-[#07160f] p-1 rounded-xl border border-emerald-900/60 mb-5">
-          <button
-            type="button"
-            onClick={() => {
-              setTab('register');
-              setErrorMessage(null);
-            }}
-            className={`py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-              tab === 'register'
-                ? 'bg-amber-400 text-stone-950 font-black shadow-md'
-                : 'text-emerald-200/70 hover:text-white'
-            }`}
-          >
-            <Key className="w-3.5 h-3.5" />
-            Registrieren
-          </button>
+        {/* Step Indicator Header */}
+        <div className="flex items-center justify-between text-[11px] font-bold pb-4 mb-4 border-b border-[#7e4b27]/40">
+          <div className={`flex items-center gap-1.5 ${step === 'email' ? 'text-amber-400' : 'text-emerald-400'}`}>
+            <span className="w-5 h-5 rounded-full bg-[#081a10] border border-current flex items-center justify-center text-[10px]">
+              1
+            </span>
+            <span>E-Mail</span>
+          </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              setTab('login');
-              setErrorMessage(null);
-            }}
-            className={`py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-              tab === 'login'
-                ? 'bg-amber-400 text-stone-950 font-black shadow-md'
-                : 'text-emerald-200/70 hover:text-white'
-            }`}
-          >
-            <UserCheck className="w-3.5 h-3.5" />
-            Anmelden
-          </button>
+          <span className="text-stone-600">➔</span>
+
+          <div className={`flex items-center gap-1.5 ${step === 'verify' ? 'text-amber-400' : step === 'profile' ? 'text-emerald-400' : 'text-stone-500'}`}>
+            <span className="w-5 h-5 rounded-full bg-[#081a10] border border-current flex items-center justify-center text-[10px]">
+              2
+            </span>
+            <span>Code</span>
+          </div>
+
+          <span className="text-stone-600">➔</span>
+
+          <div className={`flex items-center gap-1.5 ${step === 'profile' ? 'text-amber-400' : 'text-stone-500'}`}>
+            <span className="w-5 h-5 rounded-full bg-[#081a10] border border-current flex items-center justify-center text-[10px]">
+              3
+            </span>
+            <span>Profil</span>
+          </div>
         </div>
 
         {/* Error Feedback */}
-        {errorMessage && (
+        {errorMsg && (
           <div className="mb-4 p-2.5 rounded-xl bg-red-950/80 border border-red-700 text-red-200 text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
-            <span>{errorMessage}</span>
+            <span>{errorMsg}</span>
           </div>
         )}
 
-        {/* TAB 1: REGISTRIERUNG (MIT EINLADUNGSCODE) */}
-        {tab === 'register' && (
-          <form onSubmit={handleRegister} className="space-y-3.5">
+        {/* Success Feedback */}
+        {successMsg && (
+          <div className="mb-4 p-2.5 rounded-xl bg-emerald-950/80 border border-emerald-600 text-emerald-200 text-xs flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-neon-lime" />
+            <span>{successMsg}</span>
+          </div>
+        )}
+
+        {/* ================================================================= */}
+        {/* SCHRITT 1: E-Mail eingeben & gegen Whitelist prüfen               */}
+        {/* ================================================================= */}
+        {step === 'email' && (
+          <form onSubmit={handleEmailSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-amber-300 mb-1 flex items-center justify-between">
-                <span>Einladungscode</span>
-                <span className="text-[10px] text-emerald-400/80 font-normal">
-                  Standard: KICKER2026
-                </span>
+              <label className="block text-xs font-bold text-emerald-200 mb-1 flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5 text-amber-400" />
+                Deine E-Mail-Adresse
+              </label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="name@otto.de"
+                className="w-full bg-[#0a2014] border border-emerald-700/60 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-emerald-500/40 focus:outline-none focus:border-amber-400 font-medium"
+              />
+              <p className="text-[10px] text-emerald-400/70 mt-1.5">
+                * Nur freigeschaltete Adressen/Domains erhalten Zutritt zur geschlossenen Liga.
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 text-stone-950 font-black text-xs shadow-lg flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform"
+            >
+              <span>{isLoading ? 'Prüfe Whitelist...' : 'Weiter & Code anfordern'}</span>
+              <ArrowRight className="w-4 h-4 stroke-[3]" />
+            </button>
+          </form>
+        )}
+
+        {/* ================================================================= */}
+        {/* SCHRITT 2: 6-stelligen Verifikationscode eingeben                */}
+        {/* ================================================================= */}
+        {step === 'verify' && (
+          <form onSubmit={handleVerifySubmit} className="space-y-4">
+            <div className="text-center space-y-1">
+              <div className="text-xs text-emerald-200">
+                Code gesendet an: <strong className="text-white">{email}</strong>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStep('email')}
+                className="text-[10px] text-amber-400 hover:underline inline-flex items-center gap-1"
+              >
+                <Edit2 className="w-3 h-3" />
+                Andere E-Mail verwenden
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-amber-300 mb-1 text-center">
+                6-stelliger Verifikationscode
               </label>
               <input
                 type="text"
                 required
-                value={regCode}
-                onChange={(e) => setRegCode(e.target.value.toUpperCase())}
-                placeholder="z.B. KICKER2026"
-                className="w-full bg-[#0a2014] border border-emerald-700/60 rounded-xl px-3.5 py-2.5 text-xs text-white uppercase font-mono font-bold tracking-wider placeholder-emerald-500/40 focus:outline-none focus:border-amber-400"
+                maxLength={6}
+                value={verificationCode}
+                onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
+                placeholder="123456"
+                className="w-full bg-[#0a2014] border-2 border-amber-400/70 rounded-xl py-3 text-center text-2xl font-mono font-black tracking-[0.4em] text-white placeholder-emerald-500/30 focus:outline-none focus:border-amber-400"
               />
+
+              {/* Instant Code Preview Box for direct testing */}
+              {sentCodePreview && (
+                <div className="mt-2.5 p-2 rounded-lg bg-emerald-950/60 border border-emerald-700/60 text-center">
+                  <span className="text-[10px] text-emerald-300 block">
+                    📨 Vorschau-Code für schnellen Login:
+                  </span>
+                  <span className="font-mono font-bold text-amber-300 text-sm tracking-wider">
+                    {sentCodePreview}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 text-white font-black text-xs shadow-lg flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform"
+            >
+              <span>Code bestätigen</span>
+              <ArrowRight className="w-4 h-4 stroke-[3]" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleEmailSubmit}
+              className="w-full text-center text-[11px] text-emerald-400/80 hover:text-white flex items-center justify-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3" />
+              Neuen Code senden
+            </button>
+          </form>
+        )}
+
+        {/* ================================================================= */}
+        {/* SCHRITT 3: Spielerprofil anlegen                                  */}
+        {/* ================================================================= */}
+        {step === 'profile' && (
+          <form onSubmit={handleProfileSubmit} className="space-y-4">
+            <div className="text-center">
+              <h3 className="font-display text-lg font-bold text-white">
+                Profil einrichten
+              </h3>
+              <p className="text-xs text-emerald-300/80 mt-0.5">
+                Wähle deinen Spielernamen und dein Liga-Icon
+              </p>
             </div>
 
             <div>
@@ -154,28 +292,13 @@ export function AuthLandingView() {
               <input
                 type="text"
                 required
-                value={regName}
-                onChange={(e) => setRegName(e.target.value)}
-                placeholder="z.B. Birk oder Alex K."
-                className="w-full bg-[#0a2014] border border-emerald-700/60 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-emerald-500/40 focus:outline-none focus:border-amber-400"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="z.B. Alex K. oder Birk"
+                className="w-full bg-[#0a2014] border border-emerald-700/60 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-emerald-500/40 focus:outline-none focus:border-amber-400 font-bold"
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-emerald-200 mb-1">
-                E-Mail-Adresse
-              </label>
-              <input
-                type="email"
-                required
-                value={regEmail}
-                onChange={(e) => setRegEmail(e.target.value)}
-                placeholder="name@beispiel.de"
-                className="w-full bg-[#0a2014] border border-emerald-700/60 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-emerald-500/40 focus:outline-none focus:border-amber-400"
-              />
-            </div>
-
-            {/* Avatar Picker */}
             <div>
               <label className="block text-xs font-bold text-emerald-200 mb-1.5">
                 Avatar-Symbol wählen
@@ -185,9 +308,9 @@ export function AuthLandingView() {
                   <button
                     key={av}
                     type="button"
-                    onClick={() => setRegAvatar(av)}
+                    onClick={() => setAvatar(av)}
                     className={`h-9 rounded-lg text-lg flex items-center justify-center transition-all ${
-                      regAvatar === av
+                      avatar === av
                         ? 'bg-amber-400 text-stone-950 scale-110 shadow'
                         : 'hover:bg-emerald-950/60 text-white'
                     }`}
@@ -200,82 +323,33 @@ export function AuthLandingView() {
 
             <button
               type="submit"
-              className="w-full mt-2 py-3 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 text-stone-950 font-black text-xs shadow-lg flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform"
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 text-stone-950 font-black text-xs shadow-lg flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform"
             >
-              <span>Liga beitreten & Profil anlegen</span>
-              <ArrowRight className="w-4 h-4 stroke-[3]" />
+              <span>Profil anlegen & Liga starten</span>
+              <Sparkles className="w-4 h-4 stroke-[2.5]" />
             </button>
-          </form>
-        )}
-
-        {/* TAB 2: ANMELDUNG (FÜR BEREITS REGISTRIERTE SPIELER) */}
-        {tab === 'login' && (
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-emerald-200 mb-1">
-                Spielername oder E-Mail
-              </label>
-              <input
-                type="text"
-                required
-                value={loginInput}
-                onChange={(e) => setLoginInput(e.target.value)}
-                placeholder="z.B. Birk"
-                className="w-full bg-[#0a2014] border border-emerald-700/60 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-emerald-500/40 focus:outline-none focus:border-amber-400"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 text-white font-black text-xs shadow-lg flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform"
-            >
-              <span>Anmelden & Loskickern</span>
-              <ArrowRight className="w-4 h-4 stroke-[3]" />
-            </button>
-
-            {/* Quick Player Select if any players already registered */}
-            {players.length > 0 && (
-              <div className="pt-3 border-t border-[#7e4b27]/40 space-y-2">
-                <span className="text-[11px] text-emerald-300/70 block text-center">
-                  Oder Profil direkt auswählen:
-                </span>
-                <div className="flex flex-wrap gap-1.5 justify-center max-h-32 overflow-y-auto">
-                  {players.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => loginPlayer(p.name)}
-                      className="px-2.5 py-1 rounded-lg bg-[#0e271a] border border-emerald-700/40 text-xs font-semibold text-emerald-200 hover:text-white hover:border-amber-400 flex items-center gap-1.5 transition-colors"
-                    >
-                      <span>{p.avatar}</span>
-                      <span>{p.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </form>
         )}
       </div>
 
-      {/* Feature Highlights */}
+      {/* Feature Highlights Footer */}
       <div className="grid grid-cols-3 gap-2 text-center pt-6">
         <div className="p-2 rounded-xl bg-emerald-950/30 border border-emerald-900/30">
-          <Swords className="w-4 h-4 mx-auto text-amber-400 mb-1" />
-          <div className="text-[10px] font-bold text-white">1v1 & 2v2</div>
-          <div className="text-[9px] text-emerald-400/60">Getrennte ELOs</div>
+          <Shield className="w-4 h-4 mx-auto text-amber-400 mb-1" />
+          <div className="text-[10px] font-bold text-white">Whitelist</div>
+          <div className="text-[9px] text-emerald-400/60">Geschützt</div>
+        </div>
+
+        <div className="p-2 rounded-xl bg-emerald-950/30 border border-emerald-900/30">
+          <KeyRound className="w-4 h-4 mx-auto text-amber-400 mb-1" />
+          <div className="text-[10px] font-bold text-white">E-Mail Code</div>
+          <div className="text-[9px] text-emerald-400/60">Sicherer Login</div>
         </div>
 
         <div className="p-2 rounded-xl bg-emerald-950/30 border border-emerald-900/30">
           <Trophy className="w-4 h-4 mx-auto text-amber-400 mb-1" />
-          <div className="text-[10px] font-bold text-white">Turniermodus</div>
-          <div className="text-[9px] text-emerald-400/60">K.O. & Tabellen</div>
-        </div>
-
-        <div className="p-2 rounded-xl bg-emerald-950/30 border border-emerald-900/30">
-          <Shield className="w-4 h-4 mx-auto text-amber-400 mb-1" />
-          <div className="text-[10px] font-bold text-white">Faire Wertung</div>
-          <div className="text-[9px] text-emerald-400/60">Direkte Einigung</div>
+          <div className="text-[10px] font-bold text-white">Liga & Elo</div>
+          <div className="text-[9px] text-emerald-400/60">Turniermodus</div>
         </div>
       </div>
     </div>
