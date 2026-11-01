@@ -35,12 +35,12 @@ interface StoreContextType {
     scoreB: number;
   }) => Promise<{ success: boolean; matchId: string; message: string }>;
   confirmMatch: (matchId: string, matchOverride?: Match) => void;
-  acknowledgeMatch: (matchId: string) => void;
-  disputeMatch: (matchId: string, reason: string, proposedScoreA?: number, proposedScoreB?: number) => void;
-  proposeDisputeResolution: (matchId: string, proposedScoreA: number, proposedScoreB: number, reason?: string) => void;
-  acceptDisputeResolution: (matchId: string) => void;
-  cancelMatchByMutualAgreement: (matchId: string) => void;
-  adminResolveDispute: (matchId: string, action: 'confirm' | 'cancel', adjustedScoreA?: number, adjustedScoreB?: number) => void;
+  acknowledgeMatch: (matchId: string) => Promise<void>;
+  disputeMatch: (matchId: string, reason: string, proposedScoreA?: number, proposedScoreB?: number) => Promise<void>;
+  proposeDisputeResolution: (matchId: string, proposedScoreA: number, proposedScoreB: number, reason?: string) => Promise<void>;
+  acceptDisputeResolution: (matchId: string) => Promise<void>;
+  cancelMatchByMutualAgreement: (matchId: string) => Promise<void>;
+  adminResolveDispute: (matchId: string, action: 'confirm' | 'cancel', adjustedScoreA?: number, adjustedScoreB?: number) => Promise<void>;
   registerWithInvite: (params: { name: string; email: string; inviteCode: string; avatar: string }) => Promise<{ success: boolean; message: string }>;
   loginPlayer: (nameOrEmail: string) => { success: boolean; message: string };
   logout: () => Promise<void>;
@@ -172,6 +172,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           resultApplied: match.result_applied ?? match.status === 'confirmed',
           disputedBy: match.disputed_by || undefined,
           disputeReason: match.dispute_reason || undefined,
+          disputeProposedScoreA: match.dispute_proposed_score_a ?? undefined,
+          disputeProposedScoreB: match.dispute_proposed_score_b ?? undefined,
+          disputeProposedBy: match.dispute_proposed_by || undefined,
           eloChangeA: match.elo_change_a || 0,
           eloChangeB: match.elo_change_b || 0,
           tournamentId: match.tournament_id || undefined,
@@ -330,6 +333,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         elo_change_a: number;
         elo_change_b: number;
         result_applied: boolean;
+        disputed_by?: string;
+        dispute_reason?: string;
+        dispute_proposed_score_a?: number;
+        dispute_proposed_score_b?: number;
+        dispute_proposed_by?: string;
         created_at: string;
       };
       const mappedMatch: Match = {
@@ -344,6 +352,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         status: remoteMatch.status,
         confirmedBy: remoteMatch.confirmed_by,
         resultApplied: remoteMatch.result_applied,
+        disputedBy: remoteMatch.disputed_by,
+        disputeReason: remoteMatch.dispute_reason,
+        disputeProposedScoreA: remoteMatch.dispute_proposed_score_a,
+        disputeProposedScoreB: remoteMatch.dispute_proposed_score_b,
+        disputeProposedBy: remoteMatch.dispute_proposed_by,
         eloChangeA: remoteMatch.elo_change_a,
         eloChangeB: remoteMatch.elo_change_b,
       };
@@ -533,10 +546,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const acknowledgeMatch = (matchId: string) => {
+  const acknowledgeMatch = async (matchId: string) => {
     if (!currentUser) return;
     if (supabase) {
-      void supabase.rpc('acknowledge_match', { p_match_id: matchId });
+      const { error } = await supabase.rpc('acknowledge_match', { p_match_id: matchId });
+      if (error) {
+        console.error('Match acknowledgement failed:', error);
+        return;
+      }
     }
     setMatches((prev) =>
       prev.map((match) =>
@@ -550,7 +567,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     );
   };
 
-  const disputeMatch = (
+  const disputeMatch = async (
     matchId: string,
     reason: string,
     proposedScoreA?: number,
@@ -558,12 +575,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   ) => {
     if (!currentUser) return;
     if (supabase) {
-      void supabase.rpc('dispute_match', {
+      const { error } = await supabase.rpc('dispute_match', {
         p_match_id: matchId,
         p_reason: reason,
         p_score_a: proposedScoreA ?? null,
         p_score_b: proposedScoreB ?? null,
       });
+      if (error) {
+        console.error('Match dispute failed:', error);
+        return;
+      }
     }
     setMatches((prev) =>
       prev.map((m) =>
@@ -582,13 +603,31 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     );
   };
 
-  const proposeDisputeResolution = (
+  const proposeDisputeResolution = async (
     matchId: string,
     proposedScoreA: number,
     proposedScoreB: number,
     reason?: string
   ) => {
     if (!currentUser) return;
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('matches')
+        .update({
+          dispute_proposed_score_a: proposedScoreA,
+          dispute_proposed_score_b: proposedScoreB,
+          dispute_proposed_by: currentUser.id,
+          dispute_reason: reason || undefined,
+        })
+        .eq('id', matchId)
+        .eq('status', 'disputed')
+        .select('id')
+        .single();
+      if (error || !data) {
+        console.error('Dispute resolution proposal failed:', error);
+        return;
+      }
+    }
     setMatches((prev) =>
       prev.map((m) =>
         m.id === matchId
@@ -605,43 +644,102 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     );
   };
 
-  const acceptDisputeResolution = (matchId: string) => {
+  const acceptDisputeResolution = async (matchId: string) => {
     const match = matches.find((m) => m.id === matchId);
     if (!match) return;
 
+    const proposedScoreA = match.disputeProposedScoreA;
+    const proposedScoreB = match.disputeProposedScoreB;
+    if (supabase) {
+      if (proposedScoreA === undefined || proposedScoreB === undefined) return;
+      const { data, error } = await supabase
+        .from('matches')
+        .update({
+          score_a: proposedScoreA,
+          score_b: proposedScoreB,
+          status: 'confirmed',
+          confirmed_by: Array.from(new Set([...match.confirmedBy, currentUser?.id || ''])),
+        })
+        .eq('id', matchId)
+        .eq('status', 'disputed')
+        .select('id')
+        .single();
+      if (error || !data) {
+        console.error('Dispute resolution acceptance failed:', error);
+        return;
+      }
+    }
+
     if (
-      match.disputeProposedScoreA !== undefined &&
-      match.disputeProposedScoreB !== undefined
+      proposedScoreA !== undefined &&
+      proposedScoreB !== undefined
     ) {
       setMatches((prev) =>
         prev.map((m) =>
           m.id === matchId
             ? {
                 ...m,
-                scoreA: m.disputeProposedScoreA!,
-                scoreB: m.disputeProposedScoreB!,
+                scoreA: proposedScoreA,
+                scoreB: proposedScoreB,
+                status: supabase ? 'confirmed' : m.status,
               }
             : m
         )
       );
     }
 
-    confirmMatch(matchId);
+    if (!supabase) confirmMatch(matchId);
   };
 
-  const cancelMatchByMutualAgreement = (matchId: string) => {
-    setMatches((prev) => prev.filter((m) => m.id !== matchId));
+  const cancelMatchByMutualAgreement = async (matchId: string) => {
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('matches')
+        .update({ status: 'cancelled' })
+        .eq('id', matchId)
+        .in('status', ['disputed', 'pending', 'confirmed'])
+        .select('id')
+        .single();
+      if (error || !data) {
+        console.error('Match cancellation failed:', error);
+        return;
+      }
+    }
+    setMatches((prev) =>
+      supabase
+        ? prev.map((match) => match.id === matchId ? { ...match, status: 'cancelled' } : match)
+        : prev.filter((match) => match.id !== matchId)
+    );
   };
 
-  const adminResolveDispute = (
+  const adminResolveDispute = async (
     matchId: string,
     action: 'confirm' | 'cancel',
     adjustedScoreA?: number,
     adjustedScoreB?: number
   ) => {
     if (action === 'cancel') {
-      cancelMatchByMutualAgreement(matchId);
+      await cancelMatchByMutualAgreement(matchId);
       return;
+    }
+
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('matches')
+        .update({
+          ...(adjustedScoreA !== undefined && adjustedScoreB !== undefined
+            ? { score_a: adjustedScoreA, score_b: adjustedScoreB }
+            : {}),
+          status: 'confirmed',
+        })
+        .eq('id', matchId)
+        .eq('status', 'disputed')
+        .select('id')
+        .single();
+      if (error || !data) {
+        console.error('Admin match resolution failed:', error);
+        return;
+      }
     }
 
     if (adjustedScoreA !== undefined && adjustedScoreB !== undefined) {
@@ -652,7 +750,23 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       );
     }
 
-    confirmMatch(matchId);
+    if (supabase) {
+      setMatches((prev) =>
+        prev.map((m) =>
+          m.id === matchId
+            ? {
+                ...m,
+                status: 'confirmed',
+                ...(adjustedScoreA !== undefined && adjustedScoreB !== undefined
+                  ? { scoreA: adjustedScoreA, scoreB: adjustedScoreB }
+                  : {}),
+              }
+            : m
+        )
+      );
+    } else {
+      confirmMatch(matchId);
+    }
   };
 
   // =========================================================================
