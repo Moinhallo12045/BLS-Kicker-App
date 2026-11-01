@@ -51,7 +51,7 @@ export function MatchEntryModal({ isOpen, onClose }: MatchEntryModalProps) {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!opponent1Id) {
@@ -72,7 +72,7 @@ export function MatchEntryModal({ isOpen, onClose }: MatchEntryModalProps) {
     const teamA = mode === '1v1' ? [currentUser.id] : [currentUser.id, partnerId!];
     const teamB = mode === '1v1' ? [opponent1Id] : [opponent1Id, opponent2Id!];
 
-    const res = submitMatch({
+    const res = await submitMatch({
       mode,
       teamA,
       teamB,

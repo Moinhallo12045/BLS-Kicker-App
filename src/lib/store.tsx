@@ -33,7 +33,7 @@ interface StoreContextType {
     teamB: string[];
     scoreA: number;
     scoreB: number;
-  }) => { success: boolean; matchId: string; message: string };
+  }) => Promise<{ success: boolean; matchId: string; message: string }>;
   confirmMatch: (matchId: string, matchOverride?: Match) => void;
   acknowledgeMatch: (matchId: string) => void;
   disputeMatch: (matchId: string, reason: string, proposedScoreA?: number, proposedScoreB?: number) => void;
@@ -208,7 +208,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setCurrentUserId(player.id);
   };
 
-  const submitMatch = ({
+  const submitMatch = async ({
     mode,
     teamA,
     teamB,
@@ -220,8 +220,87 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     teamB: string[];
     scoreA: number;
     scoreB: number;
-  }) => {
+  }): Promise<{ success: boolean; matchId: string; message: string }> => {
     if (!currentUser) return { success: false, matchId: '', message: 'Nicht angemeldet' };
+
+    if (supabase) {
+      const { data, error } = await supabase.rpc('submit_match_result', {
+        p_mode: mode,
+        p_team_a: teamA,
+        p_team_b: teamB,
+        p_score_a: scoreA,
+        p_score_b: scoreB,
+      });
+      if (error || !data) {
+        return {
+          success: false,
+          matchId: '',
+          message: error?.message || 'Spiel konnte serverseitig nicht gespeichert werden.',
+        };
+      }
+      const remoteMatch = data as {
+        id: string;
+        mode: MatchMode;
+        creator_id: string;
+        team_a: string[];
+        team_b: string[];
+        score_a: number;
+        score_b: number;
+        status: Match['status'];
+        confirmed_by: string[];
+        elo_change_a: number;
+        elo_change_b: number;
+        result_applied: boolean;
+        created_at: string;
+      };
+      const mappedMatch: Match = {
+        id: remoteMatch.id,
+        mode: remoteMatch.mode,
+        date: remoteMatch.created_at.slice(0, 10),
+        creatorId: remoteMatch.creator_id,
+        teamA: remoteMatch.team_a,
+        teamB: remoteMatch.team_b,
+        scoreA: remoteMatch.score_a,
+        scoreB: remoteMatch.score_b,
+        status: remoteMatch.status,
+        confirmedBy: remoteMatch.confirmed_by,
+        resultApplied: remoteMatch.result_applied,
+        eloChangeA: remoteMatch.elo_change_a,
+        eloChangeB: remoteMatch.elo_change_b,
+      };
+      setMatches((prev) => [mappedMatch, ...prev]);
+      const { data: remoteProfiles } = await supabase.from('profiles').select('*');
+      if (remoteProfiles) {
+        setPlayers(remoteProfiles.map((profile) => ({
+          id: profile.id,
+          name: profile.name,
+          avatar: profile.avatar || '⚽',
+          email: profile.email || '',
+          yearJoined: profile.year_joined,
+          level: profile.level,
+          xp: profile.xp,
+          xpNextLevel: profile.xp_next_level,
+          elo1v1: profile.elo_1v1,
+          elo2v2: profile.elo_2v2,
+          eloTotal: profile.elo_total,
+          leaguePoints: profile.league_points,
+          wins1v1: profile.wins_1v1,
+          losses1v1: profile.losses_1v1,
+          wins2v2: profile.wins_2v2,
+          losses2v2: profile.losses_2v2,
+          currentStreak: profile.current_streak,
+          bestRank: profile.best_rank,
+          role: profile.role as PlayerRole,
+          badges: profile.badges || [],
+          eloHistory: profile.elo_history || [],
+        })));
+      }
+      return {
+        success: true,
+        matchId: mappedMatch.id,
+        message: 'Spiel wurde sicher gespeichert und serverseitig gewertet.',
+      };
+    }
 
     const newMatchId = 'm_' + Date.now();
     const newMatch: Match = {
