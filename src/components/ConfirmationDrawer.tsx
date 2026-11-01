@@ -10,11 +10,11 @@ interface ConfirmationDrawerProps {
 }
 
 export function ConfirmationDrawer({ isOpen, onClose }: ConfirmationDrawerProps) {
-  const { 
+  const {
     currentUser, 
     matches, 
     players, 
-    confirmMatch, 
+    acknowledgeMatch,
     disputeMatch,
     proposeDisputeResolution,
     acceptDisputeResolution,
@@ -32,10 +32,10 @@ export function ConfirmationDrawer({ isOpen, onClose }: ConfirmationDrawerProps)
 
   if (!isOpen || !currentUser) return null;
 
-  // Pending matches that require confirmation from the logged in user
+  // Effective matches that have not yet been acknowledged by the logged in user
   const pendingForMe = matches.filter(
     (m) =>
-      m.status === 'pending' &&
+      !['disputed', 'cancelled'].includes(m.status) &&
       (m.teamA.includes(currentUser.id) || m.teamB.includes(currentUser.id)) &&
       !m.confirmedBy.includes(currentUser.id)
   );
@@ -83,12 +83,12 @@ export function ConfirmationDrawer({ isOpen, onClose }: ConfirmationDrawerProps)
         <div className="space-y-3">
           <div className="text-xs font-bold uppercase tracking-wider text-amber-400/90 flex items-center gap-1.5 border-b border-emerald-900/40 pb-1">
             <Clock className="w-3.5 h-3.5" />
-            Ausstehende Bestätigungen ({pendingForMe.length})
+            Neue Spielergebnisse ({pendingForMe.length})
           </div>
 
           {pendingForMe.length === 0 ? (
             <div className="py-3 text-center text-emerald-400/60 text-xs">
-              Keine offenen Bestätigungen vorhanden.
+              Keine neuen Spielergebnisse vorhanden.
             </div>
           ) : (
             <div className="divide-y divide-emerald-900/40">
@@ -119,13 +119,13 @@ export function ConfirmationDrawer({ isOpen, onClose }: ConfirmationDrawerProps)
                         </div>
                       </div>
 
-                      {/* Quick Confirm Button */}
+                      {/* Notification acknowledgement; the result is already effective. */}
                       <button
-                        onClick={() => confirmMatch(m.id)}
+                        onClick={() => acknowledgeMatch(m.id)}
                         className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow"
                       >
                         <Check className="w-3.5 h-3.5 stroke-[3]" />
-                        Bestätigen
+                        Gesehen
                       </button>
                     </div>
 
@@ -139,7 +139,7 @@ export function ConfirmationDrawer({ isOpen, onClose }: ConfirmationDrawerProps)
                         }}
                         className="text-xs text-amber-400 hover:text-amber-300 font-semibold underline underline-offset-2 flex items-center gap-1"
                       >
-                        Stimmt nicht? (Ergebnis korrigieren)
+                        Widersprechen / Ergebnis korrigieren
                       </button>
                     ) : (
                       <div className="p-3.5 rounded-xl bg-amber-950/40 border border-amber-600/50 space-y-3 mt-2">

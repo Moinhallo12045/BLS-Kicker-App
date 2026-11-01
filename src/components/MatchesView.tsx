@@ -80,7 +80,7 @@ export function MatchesView({ onOpenMatchEntry }: { onOpenMatchEntry: () => void
                 : s === 'confirmed'
                 ? 'Bestätigt'
                 : s === 'pending'
-                ? 'Ausstehend'
+                ? 'Wirksam'
                 : 'Strittig'}
             </button>
           ))}
@@ -132,7 +132,7 @@ export function MatchesView({ onOpenMatchEntry }: { onOpenMatchEntry: () => void
                     {m.status === 'pending' && (
                       <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold flex items-center gap-1 text-[10px]">
                         <Clock className="w-3 h-3" />
-                        Ausstehend
+                        Wirksam · Widerspruch möglich
                       </span>
                     )}
                     {m.status === 'disputed' && (

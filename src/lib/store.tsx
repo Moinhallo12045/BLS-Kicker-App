@@ -34,7 +34,8 @@ interface StoreContextType {
     scoreA: number;
     scoreB: number;
   }) => { success: boolean; matchId: string; message: string };
-  confirmMatch: (matchId: string) => void;
+  confirmMatch: (matchId: string, matchOverride?: Match) => void;
+  acknowledgeMatch: (matchId: string) => void;
   disputeMatch: (matchId: string, reason: string, proposedScoreA?: number, proposedScoreB?: number) => void;
   proposeDisputeResolution: (matchId: string, proposedScoreA: number, proposedScoreB: number, reason?: string) => void;
   acceptDisputeResolution: (matchId: string) => void;
@@ -234,23 +235,31 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       scoreB,
       status: 'pending',
       confirmedBy: [currentUser.id],
+      resultApplied: false,
       eloChangeA: 0,
       eloChangeB: 0,
     };
 
     setMatches((prev) => [newMatch, ...prev]);
+    confirmMatch(newMatchId, newMatch);
 
     return {
       success: true,
       matchId: newMatchId,
-      message: 'Spiel wurde eingetragen! Die Gegenseite muss das Ergebnis bestätigen.',
+      message: 'Spiel wurde eingetragen und ist sofort wirksam. Die Gegenseite wurde benachrichtigt und kann widersprechen.',
     };
   };
 
-  const confirmMatch = (matchId: string) => {
+  const confirmMatch = (matchId: string, matchOverride?: Match) => {
     setMatches((prevMatches) => {
-      const match = prevMatches.find((m) => m.id === matchId);
+      const match = matchOverride || prevMatches.find((m) => m.id === matchId);
       if (!match || match.status === 'confirmed') return prevMatches;
+
+      if (match.resultApplied) {
+        return prevMatches.map((m) =>
+          m.id === matchId ? { ...m, status: 'confirmed' } : m
+        );
+      }
 
       // Calculate Elo changes
       const teamAPlayers = players.filter((p) => match.teamA.includes(p.id));
@@ -340,6 +349,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             currentStreak,
             eloHistory: newHistory,
           };
+
         });
 
         if (levelUpEvent) {
@@ -357,10 +367,25 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               confirmedBy: Array.from(new Set([...m.confirmedBy, currentUser?.id || ''])),
               eloChangeA: changeA,
               eloChangeB: changeB,
+              resultApplied: true,
             }
           : m
       );
     });
+  };
+
+  const acknowledgeMatch = (matchId: string) => {
+    if (!currentUser) return;
+    setMatches((prev) =>
+      prev.map((match) =>
+        match.id === matchId
+          ? {
+              ...match,
+              confirmedBy: Array.from(new Set([...match.confirmedBy, currentUser.id])),
+            }
+          : match
+      )
+    );
   };
 
   const disputeMatch = (
@@ -889,6 +914,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         switchUser,
         submitMatch,
         confirmMatch,
+        acknowledgeMatch,
         disputeMatch,
         proposeDisputeResolution,
         acceptDisputeResolution,
