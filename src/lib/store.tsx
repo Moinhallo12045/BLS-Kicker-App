@@ -814,13 +814,46 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const matches = [];
 
     if (type === 'ko') {
-      for (let i = 0; i < shuffled.length; i += 2) {
+      const bracketSize = 2 ** Math.ceil(Math.log2(Math.max(2, shuffled.length)));
+      const bracketPlayers = [...shuffled, ...Array<string | undefined>(bracketSize - shuffled.length)];
+      const rounds = Math.log2(bracketSize);
+
+      for (let i = 0; i < bracketSize; i += 2) {
         matches.push({
           id: `tm_${Date.now()}_${i}`,
           round: 1,
           matchIndex: Math.floor(i / 2),
-          playerAId: shuffled[i],
-          playerBId: shuffled[i + 1],
+          playerAId: bracketPlayers[i],
+          playerBId: bracketPlayers[i + 1],
+          winnerId: bracketPlayers[i + 1] ? undefined : bracketPlayers[i],
+        });
+      }
+
+      for (let round = 2; round <= rounds; round += 1) {
+        const matchesInRound = bracketSize / 2 ** round;
+        for (let matchIndex = 0; matchIndex < matchesInRound; matchIndex += 1) {
+          matches.push({
+            id: `tm_${Date.now()}_r${round}_i${matchIndex}`,
+            round,
+            matchIndex,
+            playerAId: undefined,
+            playerBId: undefined,
+          });
+        }
+      }
+
+      for (let round = 1; round < rounds; round += 1) {
+        const currentRound = matches.filter((match) => match.round === round);
+        const nextRound = matches.filter((match) => match.round === round + 1);
+        currentRound.forEach((match) => {
+          if (!match.winnerId) return;
+          const nextMatch = nextRound[Math.floor(match.matchIndex / 2)];
+          if (match.matchIndex % 2 === 0) nextMatch.playerAId = match.winnerId;
+          else nextMatch.playerBId = match.winnerId;
+        });
+        nextRound.forEach((match) => {
+          if (match.playerAId && !match.playerBId) match.winnerId = match.playerAId;
+          if (match.playerBId && !match.playerAId) match.winnerId = match.playerBId;
         });
       }
     } else {
