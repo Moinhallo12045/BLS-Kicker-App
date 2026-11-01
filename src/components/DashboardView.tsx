@@ -46,7 +46,7 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
   weekStart.setDate(weekStart.getDate() - dayOfWeek + 1);
   const weekStartKey = weekStart.toISOString().split('T')[0];
   const weeklyCrawlerMatches = matches
-    .filter((match) => match.status === 'confirmed' && match.date >= weekStartKey)
+    .filter((match) => !['disputed', 'cancelled'].includes(match.status) && match.date >= weekStartKey)
     .flatMap((match) => {
       if (match.scoreA === 0 && match.scoreB > 0) {
         return [{ match, playerIds: match.teamA, winningScore: match.scoreB }];
