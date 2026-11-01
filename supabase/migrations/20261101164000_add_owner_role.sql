@@ -12,7 +12,12 @@ ALTER TABLE public.profiles
 CREATE OR REPLACE FUNCTION public.is_owner()
 RETURNS BOOLEAN AS $$
 BEGIN
-  RETURN lower(coalesce(auth.jwt() ->> 'email', '')) = 'runekamprolf@gmail.com';
+  RETURN EXISTS (
+    SELECT 1
+    FROM public.profiles
+    WHERE auth_user_id = auth.uid()
+      AND role = 'owner'
+  );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
@@ -35,10 +40,6 @@ BEGIN
     );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
-
-UPDATE public.profiles
-SET role = 'owner'
-WHERE lower(email) = 'runekamprolf@gmail.com';
 
 CREATE OR REPLACE FUNCTION public.prevent_profile_tampering()
 RETURNS TRIGGER AS $$

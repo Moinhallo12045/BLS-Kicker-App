@@ -99,7 +99,12 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 CREATE OR REPLACE FUNCTION public.is_owner()
 RETURNS BOOLEAN AS $$
 BEGIN
-  RETURN lower(coalesce(auth.jwt() ->> 'email', '')) = 'runekamprolf@gmail.com';
+  RETURN EXISTS (
+    SELECT 1
+    FROM public.profiles
+    WHERE auth_user_id = auth.uid()
+      AND role = 'owner'
+  );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
@@ -118,8 +123,12 @@ RETURNS BOOLEAN AS $$
 DECLARE
   normalized_email TEXT := lower(trim(candidate_email));
 BEGIN
-  RETURN normalized_email IN ('runekamprolf@gmail.com')
-    OR EXISTS (
+  RETURN EXISTS (
+    SELECT 1
+    FROM public.profiles
+    WHERE lower(email) = normalized_email
+      AND role = 'owner'
+  ) OR EXISTS (
     SELECT 1
     FROM public.whitelist
     WHERE lower(pattern) = normalized_email

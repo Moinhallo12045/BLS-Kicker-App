@@ -15,17 +15,6 @@ import { getXpForNextLevel, MATCH_XP } from './levels';
 import { supabase } from './supabaseClient';
 import type { Session } from '@supabase/supabase-js';
 
-export const MASTER_ADMIN_EMAILS: string[] = (
-  [
-    'runekamprolf@gmail.com',
-    process.env.NEXT_PUBLIC_ADMIN_EMAIL || '',
-  ]
-    .join(',')
-)
-  .split(',')
-  .map((e) => e.toLowerCase().trim())
-  .filter(Boolean);
-
 interface StoreContextType {
   currentUser: Player | null;
   players: Player[];
@@ -106,8 +95,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const isAdminIdentity = authIdentity && (
       authIdentity.role === 'owner' ||
-      authIdentity.role === 'admin' ||
-      MASTER_ADMIN_EMAILS.includes(authIdentity.email)
+      authIdentity.role === 'admin'
     );
     if (!supabase || !isAdminIdentity) return;
 
@@ -193,12 +181,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const authenticatedPlayer = authIdentity
     ? players.find((p) => p.email.toLowerCase() === authIdentity.email)
     : null;
-  const isMasterAdmin = authIdentity
-  ? MASTER_ADMIN_EMAILS.includes(authIdentity.email)
-  : false;
   const currentUser = supabase
   ? authenticatedPlayer
-    ? { ...authenticatedPlayer, role: isMasterAdmin ? 'owner' : authIdentity!.role }
+    ? { ...authenticatedPlayer, role: authIdentity!.role }
     : null
     : localUser;
 
@@ -544,12 +529,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const existingPlayer = players.find((p) => p.email.toLowerCase() === email);
     if (existingPlayer) {
       // Auto-upgrade to admin if master admin email
-      const isMasterAdmin = MASTER_ADMIN_EMAILS.some((adm) => adm.toLowerCase() === email);
-      if (isMasterAdmin && existingPlayer.role !== 'admin') {
-        setPlayers((prev) =>
-          prev.map((p) => (p.id === existingPlayer.id ? { ...p, role: 'owner' } : p))
-        );
-      }
       setCurrentUserId(existingPlayer.id);
       return {
         success: true,
@@ -607,7 +586,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
 
     const newPlayerId = session.user.id;
-    const assignedRole: PlayerRole = MASTER_ADMIN_EMAILS.includes(email) ? 'owner' : 'player';
+    const assignedRole: PlayerRole = 'player';
 
     const newPlayer: Player = {
       id: newPlayerId,

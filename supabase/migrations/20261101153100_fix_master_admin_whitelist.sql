@@ -3,8 +3,12 @@ RETURNS BOOLEAN AS $$
 DECLARE
   normalized_email TEXT := lower(trim(candidate_email));
 BEGIN
-  RETURN normalized_email = 'runekamprolf@gmail.com'
-    OR EXISTS (
+  RETURN EXISTS (
+    SELECT 1
+    FROM public.profiles
+    WHERE lower(email) = normalized_email
+      AND role = 'owner'
+  ) OR EXISTS (
       SELECT 1
       FROM public.whitelist
       WHERE lower(pattern) = normalized_email
