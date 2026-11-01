@@ -95,6 +95,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const isAdminIdentity = authIdentity && (
       authIdentity.role === 'owner' ||
+      authIdentity.role === 'co_owner' ||
       authIdentity.role === 'admin'
     );
     if (!supabase || !isAdminIdentity) return;
@@ -630,7 +631,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updatePlayerRole = async (playerId: string, newRole: PlayerRole) => {
-    if (!currentUser || currentUser.role !== 'owner') return;
+    if (!currentUser || !['owner', 'co_owner'].includes(currentUser.role)) return;
     if (supabase) {
       const { error } = await supabase
         .from('profiles')
@@ -656,7 +657,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     const { data: sessionData } = await supabase.auth.getSession();
     const authUserId = sessionData.session?.user.id;
-    if (!authUserId || !['owner', 'admin'].includes(currentUser?.role || '')) {
+    if (!authUserId || !['owner', 'co_owner', 'admin'].includes(currentUser?.role || '')) {
       return { success: false, message: 'Nur authentifizierte Administratoren dürfen die Whitelist ändern.' };
     }
 

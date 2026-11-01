@@ -1,4 +1,4 @@
-export type PlayerRole = 'owner' | 'admin' | 'organiser' | 'player';
+export type PlayerRole = 'owner' | 'co_owner' | 'admin' | 'organiser' | 'player';
 
 export interface Player {
   id: string;

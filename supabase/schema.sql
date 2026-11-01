@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     losses_2v2 INT DEFAULT 0,
     current_streak INT DEFAULT 0,
     best_rank INT DEFAULT 999,
-    role TEXT CHECK (role IN ('owner', 'admin', 'organiser', 'player')) DEFAULT 'player',
+    role TEXT CHECK (role IN ('owner', 'co_owner', 'admin', 'organiser', 'player')) DEFAULT 'player',
     badges JSONB DEFAULT '[]'::jsonb,
     elo_history JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -113,7 +113,7 @@ RETURNS BOOLEAN AS $$
 BEGIN
   RETURN EXISTS (
     SELECT 1 FROM public.profiles
-    WHERE auth_user_id = auth.uid() AND role IN ('owner', 'admin')
+    WHERE auth_user_id = auth.uid() AND role IN ('owner', 'co_owner', 'admin')
   ) OR public.is_owner();
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -198,13 +198,13 @@ FOR ALL TO authenticated
 USING (
   public.is_admin() OR EXISTS (
     SELECT 1 FROM public.profiles p
-    WHERE p.auth_user_id = auth.uid() AND p.role IN ('owner', 'admin', 'organiser')
+    WHERE p.auth_user_id = auth.uid() AND p.role IN ('owner', 'co_owner', 'admin', 'organiser')
   )
 )
 WITH CHECK (
   public.is_admin() OR EXISTS (
     SELECT 1 FROM public.profiles p
-    WHERE p.auth_user_id = auth.uid() AND p.role IN ('owner', 'admin', 'organiser')
+    WHERE p.auth_user_id = auth.uid() AND p.role IN ('owner', 'co_owner', 'admin', 'organiser')
   )
 );
 
