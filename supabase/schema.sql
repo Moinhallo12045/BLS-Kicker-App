@@ -251,11 +251,20 @@ WITH CHECK (
 );
 
 -- 5.5 Turniere Policies
-CREATE POLICY "Jeder darf Turniere lesen" ON public.tournaments 
+CREATE POLICY "Jeder darf Turniere lesen" ON public.tournaments
 FOR SELECT USING (true);
 
-CREATE POLICY "Admins und Turnierleiter dürfen Turniere verwalten" ON public.tournaments 
-FOR ALL TO authenticated 
+CREATE POLICY "Admins und Turnierleiter dürfen Turniere anlegen" ON public.tournaments
+FOR INSERT TO authenticated
+WITH CHECK (
+  (SELECT public.is_admin()) OR EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE p.auth_user_id = (SELECT auth.uid()) AND p.role IN ('owner', 'co_owner', 'admin', 'organiser')
+  )
+);
+
+CREATE POLICY "Admins und Turnierleiter dürfen Turniere bearbeiten" ON public.tournaments
+FOR UPDATE TO authenticated
 USING (
   (SELECT public.is_admin()) OR EXISTS (
     SELECT 1 FROM public.profiles p
@@ -263,6 +272,15 @@ USING (
   )
 )
 WITH CHECK (
+  (SELECT public.is_admin()) OR EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE p.auth_user_id = (SELECT auth.uid()) AND p.role IN ('owner', 'co_owner', 'admin', 'organiser')
+  )
+);
+
+CREATE POLICY "Admins und Turnierleiter dürfen Turniere löschen" ON public.tournaments
+FOR DELETE TO authenticated
+USING (
   (SELECT public.is_admin()) OR EXISTS (
     SELECT 1 FROM public.profiles p
     WHERE p.auth_user_id = (SELECT auth.uid()) AND p.role IN ('owner', 'co_owner', 'admin', 'organiser')
