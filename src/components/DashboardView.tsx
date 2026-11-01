@@ -1,52 +1,77 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { 
   Trophy, 
   Flame, 
   TrendingUp, 
   ChevronRight, 
   PlusCircle, 
-  CheckCircle2, 
   Star, 
-  Swords, 
-  Award,
   Calendar,
   Sparkles
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { getTierForLevel } from '@/lib/levels';
 import { ALL_BADGES } from '@/lib/badges';
+import { Player } from '@/types';
+import {
+  MAX_LEVEL,
+  MIN_RANKED_GAMES,
+  daysAgoKey,
+  gamesPlayed,
+  getLeagueRank,
+  getQualifiedByElo,
+  getWeekStartKey,
+  isMatchCounted,
+} from '@/lib/matchViews';
+
+type EloRange = '1w' | '1m' | 'all';
+
+/** Builds chart points from the real ELO history for the selected range. */
+function buildEloSeries(player: Player, range: EloRange): { date: string; elo: number }[] {
+  const history = [...(player.eloHistory || [])]
+    .filter((h) => Number.isFinite(h.elo))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  let series = history;
+  if (range !== 'all') {
+    const cutoff = daysAgoKey(range === '1w' ? 6 : 29);
+    const before = history.filter((h) => h.date.slice(0, 10) < cutoff);
+    const inRange = history.filter((h) => h.date.slice(0, 10) >= cutoff);
+    series = before.length > 0 ? [{ date: cutoff, elo: before[before.length - 1].elo }, ...inRange] : inRange;
+  }
+  const last = series[series.length - 1];
+  if (!last || last.elo !== player.eloTotal) {
+    series = [...series, { date: new Date().toISOString().slice(0, 10), elo: player.eloTotal }];
+  }
+  return series;
+}
+
+function formatShortDate(date: string): string {
+  const [y, m, d] = date.slice(0, 10).split('-');
+  return y && m && d ? `${d}.${m}.` : date;
+}
 
 interface DashboardViewProps {
   onOpenMatchEntry: () => void;
-  onNavigateToTab: (tab: any) => void;
+  onNavigateToTab: (tab: 'dashboard' | 'ranking' | 'matches' | 'players' | 'tournaments' | 'profile' | 'admin') => void;
 }
 
 export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardViewProps) {
   const { currentUser, players, matches, tournaments, quests } = useStore();
-  const [eloRange, setEloRange] = useState<'1w' | '1m' | 'all'>('all');
+  const [eloRange, setEloRange] = useState<EloRange>('all');
+  const gradientId = useId().replace(/:/g, '');
 
   if (!currentUser) return null;
 
-  // Calculate user rank
-  const sortedByElo = [...players].sort((a, b) => b.eloTotal - a.eloTotal);
-  const myRank = sortedByElo.findIndex((p) => p.id === currentUser.id) + 1;
+  const qualified = getQualifiedByElo(players);
+  const myRank = getLeagueRank(players, currentUser.id);
+  const myGames = gamesPlayed(currentUser);
   const tier = getTierForLevel(currentUser.level);
-
-  // Top 5 players
-  const top5 = sortedByElo.slice(0, 5);
-
-  // Recent 3 matches
-  const recentMatches = matches.slice(0, 3);
-
-  const weekStart = new Date();
-  weekStart.setHours(0, 0, 0, 0);
-  const dayOfWeek = weekStart.getDay() || 7;
-  weekStart.setDate(weekStart.getDate() - dayOfWeek + 1);
-  const weekStartKey = weekStart.toISOString().split('T')[0];
+  const top5 = qualified.slice(0, 5);
+  const weekStartKey = getWeekStartKey();
   const weeklyCrawlerMatches = matches
-    .filter((match) => !['disputed', 'cancelled'].includes(match.status) && match.date >= weekStartKey)
+    .filter((match) => isMatchCounted(match) && match.date >= weekStartKey)
     .flatMap((match) => {
       if (match.scoreA === 0 && match.scoreB > 0) {
         return [{ match, playerIds: match.teamA, winningScore: match.scoreB }];
@@ -73,20 +98,46 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
     .sort((a, b) => b.losses - a.losses || b.worstScore - a.worstScore);
 
   // XP Progress Percentage
-  const xpPercent = Math.min(100, Math.round((currentUser.xp / currentUser.xpNextLevel) * 100));
+  const isMaxLevel = currentUser.level >= MAX_LEVEL;
+  const xpPercent = isMaxLevel
+    ? 100
+    : Math.min(100, Math.max(0, Math.round((currentUser.xp / Math.max(1, currentUser.xpNextLevel)) * 100)));
+
+  const eloSeries = buildEloSeries(currentUser, eloRange);
+  const eloValues = eloSeries.map((h) => h.elo);
+  let eloMin = Math.min(...eloValues);
+  let eloMax = Math.max(...eloValues);
+  if (eloMin === eloMax) {
+    eloMin -= 10;
+    eloMax += 10;
+  }
+  const chartPoints = eloSeries.map((h, i) => {
+    const x = eloSeries.length === 1 ? 150 : (i / (eloSeries.length - 1)) * 300;
+    const y = 72 - ((h.elo - eloMin) / (eloMax - eloMin)) * 64;
+    return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
+  });
+  const polyline = chartPoints.map((pt) => `${pt.x},${pt.y}`).join(' ');
+  const areaPath =
+    chartPoints.length > 1
+      ? `M0,80 L${chartPoints.map((pt) => `${pt.x},${pt.y}`).join(' L')} L300,80 Z`
+      : '';
+  const lastPoint = chartPoints[chartPoints.length - 1];
+  const realMin = Math.min(...eloValues);
+  const realMax = Math.max(...eloValues);
+  const upcomingTournaments = tournaments.filter((t) => t.status !== 'completed').slice(0, 2);
 
   return (
-    <div className="space-y-6 pb-24">
+    <div className="space-y-5">
       {/* Hero Player Card (Matching screenshot 5 & 2) */}
-      <div className="wood-panel p-5 relative overflow-hidden">
+      <div className="wood-panel p-4 sm:p-5 relative overflow-hidden">
         {/* Subtle decorative glow */}
         <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3.5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             {/* Avatar with Level Badge */}
             <div className="relative">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-b from-[#1b432e] to-[#0d2217] border-2 border-emerald-500/60 shadow-lg flex items-center justify-center text-3xl">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-b from-[#1b432e] to-[#0d2217] border-2 border-emerald-500/60 shadow-lg flex items-center justify-center text-3xl">
                 {currentUser.avatar}
               </div>
               <div 
@@ -97,12 +148,12 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
               </div>
             </div>
 
-            <div>
+            <div className="min-w-0">
               <div className="text-xs text-emerald-300 font-semibold tracking-wide uppercase">
                 Willkommen zurück,
               </div>
-              <h2 className="font-display text-2xl font-bold text-white flex items-center gap-2">
-                {currentUser.name}
+              <h2 className="font-display text-xl sm:text-2xl font-bold text-white flex items-center gap-2 min-w-0">
+                <span className="truncate">{currentUser.name}</span>
                 {currentUser.currentStreak >= 3 && (
                   <span className="text-sm px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1 font-sans">
                     <Flame className="w-3.5 h-3.5 fill-amber-400" />
@@ -117,17 +168,24 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
           </div>
 
           {/* Quick Rank Badge */}
-          <div className="text-right">
-            <div className="text-[10px] uppercase font-bold text-emerald-400/80 tracking-wider">
-              Rang
-            </div>
-            <div className="font-display text-3xl font-extrabold text-amber-400 flex items-center justify-end gap-1">
-              <span className="text-lg text-amber-500/80">#</span>
-              {myRank}
-            </div>
-            <div className="text-[11px] text-emerald-300/80">
-              von {players.length} Spielern
-            </div>
+          <div className="text-right shrink-0">
+            <div className="text-[10px] uppercase font-bold text-emerald-400/80 tracking-wider">Rang</div>
+            {myRank ? (
+              <>
+                <div className="font-display text-3xl font-extrabold text-amber-400 flex items-center justify-end gap-1">
+                  <span className="text-lg text-amber-500/80">#</span>
+                  {myRank}
+                </div>
+                <div className="text-[11px] text-emerald-300/80">von {qualified.length} qualifizierten</div>
+              </>
+            ) : (
+              <>
+                <div className="font-display text-3xl font-extrabold text-stone-400">–</div>
+                <div className="text-[11px] text-emerald-300/80">
+                  nicht qualifiziert ({Math.min(myGames, MIN_RANKED_GAMES)}/{MIN_RANKED_GAMES} Spiele)
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -136,10 +194,10 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
           <div className="flex items-center justify-between text-xs mb-1.5">
             <span className="font-semibold text-emerald-200/90 flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              Level {currentUser.level} Fortschritt
+              {isMaxLevel ? `Level ${MAX_LEVEL} – Maximallevel` : `Level ${currentUser.level} Fortschritt`}
             </span>
             <span className="text-amber-300 font-bold">
-              {currentUser.xp} / {currentUser.xpNextLevel} XP
+              {isMaxLevel ? 'Max' : `${currentUser.xp} / ${currentUser.xpNextLevel} XP`}
             </span>
           </div>
           <div className="w-full h-3 rounded-full bg-[#170e06] p-0.5 border border-[#834f2a]/60 overflow-hidden">
@@ -151,20 +209,20 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
         </div>
 
         {/* Stats Grid */}
-        <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-          <div className="rounded-xl bg-[#0e271a]/80 border border-emerald-700/30 p-2.5">
+        <div className="mt-4 grid grid-cols-3 gap-1.5 sm:gap-2 text-center">
+          <div className="rounded-xl bg-[#0e271a]/80 border border-emerald-700/30 p-2 sm:p-2.5 min-w-0">
             <div className="text-[10px] uppercase font-bold text-emerald-400/80">ELO Total</div>
-            <div className="text-xl font-black text-white">{currentUser.eloTotal}</div>
+            <div className="text-lg sm:text-xl font-black text-white">{currentUser.eloTotal}</div>
             <div className="text-[10px] text-emerald-400/70">1v1: {currentUser.elo1v1}</div>
           </div>
-          <div className="rounded-xl bg-[#0e271a]/80 border border-emerald-700/30 p-2.5">
+          <div className="rounded-xl bg-[#0e271a]/80 border border-emerald-700/30 p-2 sm:p-2.5 min-w-0">
             <div className="text-[10px] uppercase font-bold text-emerald-400/80">Ligapunkte</div>
-            <div className="text-xl font-black text-amber-400">{currentUser.leaguePoints}</div>
+            <div className="text-lg sm:text-xl font-black text-amber-400">{currentUser.leaguePoints}</div>
             <div className="text-[10px] text-amber-400/70">3 Pkt / Sieg</div>
           </div>
-          <div className="rounded-xl bg-[#0e271a]/80 border border-emerald-700/30 p-2.5">
+          <div className="rounded-xl bg-[#0e271a]/80 border border-emerald-700/30 p-2 sm:p-2.5 min-w-0">
             <div className="text-[10px] uppercase font-bold text-emerald-400/80">Bilanz</div>
-            <div className="text-xl font-black text-white">
+            <div className="text-lg sm:text-xl font-black text-white">
               {currentUser.wins1v1 + currentUser.wins2v2}
               <span className="text-emerald-400 text-sm font-semibold mx-1">:</span>
               {currentUser.losses1v1 + currentUser.losses2v2}
@@ -188,8 +246,9 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
 
         {/* Big Match Entry CTA Button */}
         <button
+          type="button"
           onClick={onOpenMatchEntry}
-          className="mt-4 w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm shadow-[0_4px_16px_rgba(16,185,129,0.35)] flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+          className="mt-4 w-full min-h-[48px] py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm shadow-[0_4px_16px_rgba(16,185,129,0.35)] flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
         >
           <PlusCircle className="w-5 h-5 text-amber-300" />
           <span>Neues Spiel eintragen</span>
@@ -205,36 +264,57 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
           <span className="text-[11px] text-emerald-400/80 font-medium">neu montags</span>
         </div>
 
-        <div className="space-y-2.5">
-          {quests.map((q) => (
-            <div
-              key={q.id}
-              className={`flex items-center justify-between p-2.5 rounded-xl border transition-colors ${
-                q.completed
-                  ? 'bg-emerald-950/40 border-emerald-800/40 text-emerald-200'
-                  : 'bg-emerald-950/20 border-emerald-900/30 text-stone-300'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${
+        {quests.length === 0 ? (
+          <p className="text-xs text-emerald-300/60">Diese Woche gibt es keine Aufgaben.</p>
+        ) : (
+          <ul className="space-y-2.5">
+            {quests.map((q) => {
+              const total = Math.max(1, q.total || 1);
+              const progress = Math.min(total, Math.max(0, q.progress || 0));
+              const percent = Math.round((progress / total) * 100);
+              return (
+                <li
+                  key={q.id}
+                  className={`p-2.5 rounded-xl border transition-colors ${
                     q.completed
-                      ? 'bg-amber-500 text-stone-950 font-black'
-                      : 'border border-emerald-600/50 text-emerald-400'
+                      ? 'bg-emerald-950/40 border-emerald-700/50 text-emerald-200'
+                      : 'bg-emerald-950/20 border-emerald-900/30 text-stone-300'
                   }`}
                 >
-                  {q.id === 'q4' ? <Star className="w-3.5 h-3.5 fill-current" /> : '✓'}
-                </div>
-                <span className={`text-xs font-medium ${q.completed ? 'line-through text-emerald-300/80' : ''}`}>
-                  {q.title}
-                </span>
-              </div>
-              <span className="text-xs font-bold text-amber-400 font-display">
-                +{q.rewardXp} XP
-              </span>
-            </div>
-          ))}
-        </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div
+                        className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-xs ${
+                          q.completed ? 'bg-amber-500 text-stone-950 font-black' : 'border border-emerald-600/50 text-emerald-400'
+                        }`}
+                        aria-hidden
+                      >
+                        {q.completed ? '✓' : <Star className="w-3 h-3" />}
+                      </div>
+                      <span className="text-xs font-medium">{q.title}</span>
+                    </div>
+                    <span className={`text-xs font-bold shrink-0 ${q.completed ? 'text-neon-lime' : 'text-amber-400'}`}>
+                      {q.completed ? 'Geschafft' : `${progress}/${total}`}
+                    </span>
+                  </div>
+                  <div
+                    className="mt-2 h-1.5 rounded-full bg-[#06140d] overflow-hidden"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={total}
+                    aria-valuenow={progress}
+                    aria-label={q.title}
+                  >
+                    <div
+                      className={`h-full rounded-full ${q.completed ? 'bg-neon-lime' : 'bg-amber-400'}`}
+                      style={{ width: `${percent}%` }}
+                    />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
 
       <div className="felt-card p-4 border border-amber-700/40 bg-amber-950/20">
@@ -250,7 +330,7 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
           <div className="space-y-1.5">
             {weeklyCrawlers.map(({ playerId, losses, worstScore }, index) => (
               <div key={playerId} className="flex items-center justify-between rounded-lg bg-amber-950/30 px-2.5 py-2">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0">
                   <span className="w-5 text-center text-xs font-black text-amber-400">#{index + 1}</span>
                   <span className="text-xs font-bold text-white">
                     {players.find((player) => player.id === playerId)?.name || 'Unbekannt'}
@@ -272,8 +352,9 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
             Abzeichen
           </h3>
           <button
+            type="button"
             onClick={() => onNavigateToTab('profile')}
-            className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-0.5 font-semibold"
+            className="min-h-[44px] px-1 text-xs text-amber-400 hover:text-amber-300 flex items-center gap-0.5 font-semibold"
           >
             {currentUser.badges.length} von {ALL_BADGES.length}
             <ChevronRight className="w-3.5 h-3.5" />
@@ -304,20 +385,20 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
 
       {/* Elo-Verlauf Interactive Chart (Directly matches Screenshot 2) */}
       <div className="felt-card p-4">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <h3 className="font-display text-lg font-bold text-white flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-emerald-400" />
             Elo-Verlauf
           </h3>
-          <div className="flex items-center bg-[#07160f] p-1 rounded-full border border-emerald-900/60">
+          <div className="flex items-center bg-[#07160f] p-0.5 rounded-full border border-emerald-900/60" role="group" aria-label="Zeitraum">
             {(['1w', '1m', 'all'] as const).map((r) => (
               <button
                 key={r}
+                type="button"
                 onClick={() => setEloRange(r)}
-                className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-all ${
-                  eloRange === r
-                    ? 'bg-amber-400 text-stone-950 font-bold'
-                    : 'text-emerald-300/70 hover:text-white'
+                aria-pressed={eloRange === r}
+                className={`min-h-[44px] px-3 rounded-full text-[11px] font-semibold transition-all ${
+                  eloRange === r ? 'bg-amber-400 text-stone-950 font-bold' : 'text-emerald-300/70 hover:text-white'
                 }`}
               >
                 {r === '1w' ? '1 Woche' : r === '1m' ? '1 Monat' : 'Alles'}
@@ -326,41 +407,44 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
           </div>
         </div>
 
-        {/* Chart Visualizer */}
-        <div className="h-32 w-full flex flex-col justify-end relative pt-4">
-          <div className="absolute top-2 left-0 text-[10px] text-emerald-400/60 font-mono">
-            Max: {Math.max(...currentUser.eloHistory.map((h) => h.elo), currentUser.eloTotal)}
+        <div className="w-full">
+          <div className="flex justify-between text-[10px] text-emerald-400/60 font-mono mb-1">
+            <span>Max: {realMax}</span>
+            <span>Min: {realMin}</span>
           </div>
-          <div className="absolute bottom-6 left-0 text-[10px] text-emerald-400/60 font-mono">
-            Min: {Math.min(...currentUser.eloHistory.map((h) => h.elo), 1400)}
-          </div>
-
-          {/* SVG Line Chart */}
-          <div className="w-full h-20 relative">
-            <svg className="w-full h-full overflow-visible" viewBox="0 0 300 80">
+          <div className="w-full aspect-[300/80] relative">
+            <svg
+              className="w-full h-full overflow-visible"
+              viewBox="0 0 300 80"
+              preserveAspectRatio="none"
+              role="img"
+              aria-label={`ELO-Verlauf: ${eloSeries.length} Datenpunkte, aktuell ${currentUser.eloTotal}`}
+            >
               <defs>
-                <linearGradient id="eloGlow" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.3" />
                   <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
                 </linearGradient>
               </defs>
-              <polyline
-                fill="url(#eloGlow)"
-                stroke="#f59e0b"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                points="0,65 60,60 130,45 200,50 250,20 300,28"
-              />
-              {/* Highlight points */}
-              <circle cx="250" cy="20" r="4" fill="#fbbf24" stroke="#78350f" strokeWidth="2" />
-              <circle cx="300" cy="28" r="4.5" fill="#22c55e" stroke="#064e3b" strokeWidth="2" />
+              {areaPath && <path d={areaPath} fill={`url(#${gradientId})`} />}
+              {chartPoints.length > 1 && (
+                <polyline
+                  fill="none"
+                  stroke="#f59e0b"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  vectorEffect="non-scaling-stroke"
+                  points={polyline}
+                />
+              )}
+              {lastPoint && (
+                <circle cx={lastPoint.x} cy={lastPoint.y} r="4" fill="#22c55e" stroke="#064e3b" strokeWidth="2" />
+              )}
             </svg>
           </div>
-
-          <div className="flex justify-between text-[10px] text-emerald-400/60 pt-2 border-t border-emerald-900/40">
-            <span>Vor 2 Wochen</span>
-            <span>Letzte Woche</span>
+          <div className="flex justify-between text-[10px] text-emerald-400/60 pt-2 mt-1 border-t border-emerald-900/40">
+            <span>{eloSeries.length > 1 ? formatShortDate(eloSeries[0].date) : 'Noch kein Verlauf'}</span>
             <span className="text-amber-400 font-semibold">Aktuell ({currentUser.eloTotal})</span>
           </div>
         </div>
@@ -374,14 +458,20 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
             Top 5 der Liga
           </h3>
           <button
+            type="button"
             onClick={() => onNavigateToTab('ranking')}
-            className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-0.5 font-semibold"
+            className="min-h-[44px] px-1 text-xs text-amber-400 hover:text-amber-300 flex items-center gap-0.5 font-semibold"
           >
             Alle anzeigen
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
 
+        {top5.length === 0 && (
+          <p className="text-xs text-emerald-300/60">
+            Noch niemand hat {MIN_RANKED_GAMES} gewertete Spiele – die Rangliste füllt sich bald.
+          </p>
+        )}
         <div className="divide-y divide-emerald-900/30">
           {top5.map((p, idx) => (
             <div key={p.id} className="py-2.5 flex items-center justify-between">
@@ -433,8 +523,9 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
             Aktive & Kommende Turniere
           </h3>
           <button
+            type="button"
             onClick={() => onNavigateToTab('tournaments')}
-            className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-0.5 font-semibold"
+            className="min-h-[44px] px-1 text-xs text-amber-400 hover:text-amber-300 flex items-center gap-0.5 font-semibold"
           >
             Übersicht
             <ChevronRight className="w-3.5 h-3.5" />
@@ -442,15 +533,19 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
         </div>
 
         <div className="space-y-2">
-          {tournaments.slice(0, 2).map((t) => (
-            <div
+          {upcomingTournaments.length === 0 && (
+            <p className="text-xs text-emerald-300/60">Aktuell laufen keine Turniere.</p>
+          )}
+          {upcomingTournaments.map((t) => (
+            <button
+              type="button"
               key={t.id}
               onClick={() => onNavigateToTab('tournaments')}
-              className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/40 hover:border-emerald-600/50 cursor-pointer transition-all flex items-center justify-between"
+              className="w-full text-left min-h-[44px] p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/40 hover:border-emerald-600/50 transition-all flex items-center justify-between gap-2"
             >
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-white">{t.name}</span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-xs font-bold text-white truncate">{t.name}</span>
                   <span
                     className={`text-[9px] uppercase px-1.5 py-0.5 rounded font-bold ${
                       t.status === 'running'
@@ -465,8 +560,8 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
                   Modus: {t.type.toUpperCase()} • {t.mode} • {t.participants.length} Teilnehmer
                 </div>
               </div>
-              <ChevronRight className="w-4 h-4 text-emerald-400/60" />
-            </div>
+              <ChevronRight className="w-4 h-4 text-emerald-400/60 shrink-0" />
+            </button>
           ))}
         </div>
       </div>

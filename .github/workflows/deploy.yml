@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -37,6 +38,23 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: npm run build
+
+      - name: Wait for database migration
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          for attempt in $(seq 1 60); do
+            status=$(gh run list --workflow supabase-migrate.yml --commit "$HEAD_SHA" --json status,conclusion --jq '.[0] | if . == null then "none" elif .status == "completed" then .conclusion else .status end')
+            case "$status" in
+              success) exit 0 ;;
+              failure|cancelled|timed_out|action_required) echo "::error::Database migration failed: $status"; exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "::error::Database migration did not complete in time"
+          exit 1
 
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v3
