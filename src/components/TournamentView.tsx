@@ -1,566 +1,455 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useStore } from '@/lib/store';
-import { Tournament, TournamentMatch, MatchMode } from '@/types';
-import { Crown, Trophy, Users, Plus, Check, Play, ChevronRight, Award } from 'lucide-react';
+import { MatchMode, Tournament, TournamentMatch, TournamentTeam, TournamentType } from '@/types';
+import { Crown, Plus, Trophy, X } from 'lucide-react';
 
-export function TournamentView() {
-  const {
-    tournaments,
-    players,
-    currentUser,
-    createTournament,
-    advanceTournamentMatch,
-    submitMatch,
-  } = useStore();
-  const [selectedTourneyId, setSelectedTourneyId] = useState<string>(tournaments[0]?.id || '');
-  const [showCreateModal, setShowCreateModal] = useState(false);
+const fieldClass = 'min-h-[44px] w-full min-w-0 rounded-xl border border-emerald-700 bg-emerald-950 p-3 text-base text-white focus:outline-none focus:ring-2 focus:ring-amber-400';
+const buttonClass = 'min-h-[44px] rounded-xl px-3 py-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:opacity-50';
+const knockoutSizes = [2, 4, 8, 16, 32, 64];
 
-  // New Tournament Form State
-  const [newName, setNewName] = useState('');
-  const [newDesc, setNewDesc] = useState('');
-  const [newType, setNewType] = useState<'ko' | 'groups' | 'round_robin'>('ko');
-  const [newMode, setNewMode] = useState<MatchMode>('1v1');
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [selectedParticipants, setSelectedParticipants] = useState<string[]>(
-    players.slice(0, 8).map((p) => p.id)
-  );
+function tournamentTeams(tournament: Tournament): TournamentTeam[] {
+  return tournament.teams?.length
+    ? tournament.teams
+    : tournament.mode === '1v1'
+      ? tournament.participants.map((id) => ({ id, playerIds: [id] }))
+      : [];
+}
 
-  // Match scoring modal state
-  const [activeScoringMatch, setActiveScoringMatch] = useState<TournamentMatch | null>(null);
-  const [scoreA, setScoreA] = useState(10);
-  const [scoreB, setScoreB] = useState(7);
+function sideId(match: TournamentMatch, side: 'A' | 'B'): string | undefined {
+  return (side === 'A' ? match.teamAId ?? match.playerAId : match.teamBId ?? match.playerBId) ?? undefined;
+}
 
-  const currentTourney = tournaments.find((t) => t.id === selectedTourneyId) || tournaments[0];
+function winningTeamId(match: TournamentMatch, teams: TournamentTeam[]): string | undefined {
+  if (match.winnerTeamId) return match.winnerTeamId;
+  if (!match.winnerId) return undefined;
+  return teams.find((team) => team.id === match.winnerId)?.id
+    ?? teams.find((team) => team.playerIds.includes(match.winnerId ?? ''))?.id;
+}
 
-  const getPlayer = (id?: string) => (id ? players.find((p) => p.id === id) : null);
-  const standings = currentTourney
-    ? currentTourney.participants
-        .map((playerId) => {
-          const playerMatches = currentTourney.matches.filter(
-            (match) => match.playerAId === playerId || match.playerBId === playerId
-          );
-          const wins = playerMatches.filter((match) => match.winnerId === playerId).length;
-          const losses = playerMatches.filter(
-            (match) => match.winnerId && match.winnerId !== playerId
-          ).length;
-          const scored = playerMatches.reduce(
-            (total, match) =>
-              total +
-              (match.playerAId === playerId ? match.scoreA || 0 : match.scoreB || 0),
-            0
-          );
-          const conceded = playerMatches.reduce(
-            (total, match) =>
-              total +
-              (match.playerAId === playerId ? match.scoreB || 0 : match.scoreA || 0),
-            0
-          );
-          return {
-            playerId,
-            games: wins + losses,
-            wins,
-            losses,
-            scored,
-            conceded,
-            points: wins * 3,
-          };
-        })
-        .sort((a, b) => b.points - a.points || b.scored - a.scored || a.conceded - b.conceded)
-    : [];
+function roundTitle(round: number, lastRound: number, knockout: boolean): string {
+  if (!knockout) return `Spieltag ${round}`;
+  const remaining = lastRound - round;
+  if (remaining === 0) return 'Finale';
+  if (remaining === 1) return 'Halbfinale';
+  if (remaining === 2) return 'Viertelfinale';
+  if (remaining === 3) return 'Achtelfinale';
+  return `Runde der ${2 ** (remaining + 1)}`;
+}
 
-  const handleCreateSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newName.trim()) {
-      setCreateError('Bitte einen Turniernamen eingeben.');
-      return;
-    }
-    if (newType === 'ko' && ![8, 16, 32, 64].includes(selectedParticipants.length)) {
-      setCreateError('K.-o.-Turniere benötigen 8, 16, 32 oder 64 Teilnehmer.');
-      return;
-    }
-    if (newType !== 'ko' && selectedParticipants.length < 2) {
-      setCreateError('Mindestens zwei Teilnehmer auswählen.');
-      return;
-    }
-    setCreateError(null);
+function Modal({ title, busy, onClose, children }: {
+  title: string;
+  busy: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const panel = useRef<HTMLDivElement>(null);
+  const closeState = useRef({ busy, onClose });
+  closeState.current = { busy, onClose };
 
-    createTournament({
-      name: newName.trim(),
-      description: newDesc.trim() || 'Offizielles Liga-Turnier',
-      type: newType,
-      mode: newMode,
-      participants: selectedParticipants,
-    });
-
-    setShowCreateModal(false);
-    setNewName('');
-    setNewDesc('');
-    setCreateError(null);
-  };
-
-  const handleScoreSubmit = async () => {
-    if (!activeScoringMatch || !currentTourney) return;
-    if (!activeScoringMatch.playerAId || !activeScoringMatch.playerBId) return;
-    if (!Number.isInteger(scoreA) || !Number.isInteger(scoreB) || scoreA < 0 || scoreB < 0 || scoreA === scoreB) {
-      return;
-    }
-    const result = await submitMatch({
-      mode: currentTourney.mode,
-      teamA: [activeScoringMatch.playerAId],
-      teamB: [activeScoringMatch.playerBId],
-      scoreA,
-      scoreB,
-    });
-    if (!result.success) return;
-    advanceTournamentMatch(currentTourney.id, activeScoringMatch.id, scoreA, scoreB);
-    setActiveScoringMatch(null);
-  };
-
-  // Group matches by round for K.O. view
-  const roundsMap: { [round: number]: TournamentMatch[] } = {};
-  if (currentTourney && currentTourney.type === 'ko') {
-    currentTourney.matches.forEach((m) => {
-      if (!roundsMap[m.round]) roundsMap[m.round] = [];
-      roundsMap[m.round].push(m);
-    });
-  }
+  useEffect(() => {
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    panel.current?.querySelector<HTMLElement>('input, button, select')?.focus();
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !closeState.current.busy) {
+        event.preventDefault();
+        closeState.current.onClose();
+      }
+      if (event.key !== 'Tab') return;
+      const elements = panel.current?.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]'
+      );
+      if (!elements?.length) {
+        event.preventDefault();
+        return;
+      }
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (!Array.from(elements).some((element) => element === document.activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKey);
+      if (previousFocus instanceof HTMLElement) previousFocus.focus();
+    };
+  }, []);
 
   return (
-    <div className="space-y-6 pb-24">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="font-display text-2xl font-bold text-white flex items-center gap-2">
-            <Crown className="w-6 h-6 text-amber-400" />
-            Turniermodus
-          </h2>
-          <p className="text-xs text-emerald-300/80">
-            K.O.-Bäume, Gruppenphasen & Jeder-gegen-Jeden Meisterschaften
-          </p>
+    <div className="fixed inset-0 z-50 !m-0 flex min-h-0 items-center justify-center bg-black/80 p-2 backdrop-blur-sm sm:p-4">
+      <div ref={panel} role="dialog" aria-modal="true" aria-label={title}
+        className="felt-card min-h-0 max-h-[calc(100dvh-1rem)] w-full max-w-lg overflow-y-auto overscroll-contain p-3 sm:p-5">
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <h3 className="min-w-0 text-lg font-bold text-white">{title}</h3>
+          <button type="button" onClick={onClose} disabled={busy} aria-label="Dialog schließen"
+            className={`${buttonClass} shrink-0 text-stone-300`}>
+            <X className="h-5 w-5" aria-hidden="true" />
+          </button>
         </div>
-
-        {(['owner', 'co_owner', 'admin', 'organiser'].includes(currentUser?.role || '')) && (
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs shadow flex items-center gap-1.5"
-          >
-            <Plus className="w-4 h-4 stroke-[3]" />
-            Neues Turnier
-          </button>
-        )}
+        {children}
       </div>
+    </div>
+  );
+}
 
-      {/* Tournament Selector Carousel */}
-      <div className="overflow-x-auto no-scrollbar flex items-center gap-2 pb-1">
-        {tournaments.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setSelectedTourneyId(t.id)}
-            className={`px-4 py-2.5 rounded-xl text-left border transition-all whitespace-nowrap shrink-0 ${
-              currentTourney?.id === t.id
-                ? 'bg-emerald-950/90 border-amber-400 text-white shadow-lg'
-                : 'bg-emerald-950/40 border-emerald-800/40 text-emerald-300/70 hover:text-white'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-xs">{t.name}</span>
-              <span
-                className={`text-[9px] px-1.5 py-0.2 rounded font-extrabold uppercase ${
-                  t.status === 'running'
-                    ? 'bg-emerald-500/20 text-neon-lime'
-                    : 'bg-amber-500/20 text-amber-400'
-                }`}
-              >
-                {t.status === 'running' ? 'Läuft' : t.status === 'completed' ? 'Beendet' : 'Geplant'}
-              </span>
-            </div>
-            <div className="text-[10px] text-emerald-400/60 mt-0.5">
-              {t.type === 'ko' ? 'K.O.-Baum' : t.type === 'groups' ? 'Gruppenphase' : 'Liga-Modus'} • {t.participants.length} Teilnehmer
-            </div>
-          </button>
-        ))}
-      </div>
+export function TournamentView() {
+  const { tournaments, players, currentUser, createTournament, advanceTournamentMatch, isLoading, syncError } = useStore();
+  const [selectedId, setSelectedId] = useState('');
+  const [selectedRound, setSelectedRound] = useState(0);
+  const [showCreate, setShowCreate] = useState(false);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [type, setType] = useState<TournamentType>('ko');
+  const [mode, setMode] = useState<MatchMode>('1v1');
+  const [draftTeams, setDraftTeams] = useState<TournamentTeam[]>([]);
+  const [createError, setCreateError] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [scoring, setScoring] = useState<{ tournamentId: string; matchId: string } | null>(null);
+  const [scoreA, setScoreA] = useState('10');
+  const [scoreB, setScoreB] = useState('7');
+  const [scoreError, setScoreError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [correctionConfirmed, setCorrectionConfirmed] = useState(false);
+  const [feedback, setFeedback] = useState('');
+  const createLock = useRef(false);
+  const scoreLock = useRef(false);
+  const canManage = ['owner', 'co_owner', 'admin', 'organiser'].includes(currentUser?.role ?? '');
+  const eligiblePlayers = players.filter((player) => !player.isSuspended);
+  const teamSize = mode === '2v2' ? 2 : 1;
+  const current = tournaments.find((tournament) => tournament.id === selectedId) ?? tournaments[0];
+  const teams = current ? tournamentTeams(current) : [];
+  const rounds = current ? Array.from(new Set(current.matches.map((match) => match.round))).sort((a, b) => a - b) : [];
+  const activeRound = rounds.includes(selectedRound) ? selectedRound : rounds[0];
+  const lastRound = rounds[rounds.length - 1] ?? 1;
+  const scoringTournament = tournaments.find((tournament) => tournament.id === scoring?.tournamentId);
+  const scoringMatch = scoringTournament?.matches.find((match) => match.id === scoring?.matchId);
+  const scoringTeams = scoringTournament ? tournamentTeams(scoringTournament) : [];
+  const isCorrection = !!(scoringMatch && winningTeamId(scoringMatch, scoringTeams));
 
-      {currentTourney && (
-        <div className="felt-card p-5 space-y-6">
-          {/* Tournament Overview Banner */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-900/40 pb-4">
-            <div>
-              <h3 className="font-display text-xl font-bold text-white flex items-center gap-2">
-                {currentTourney.name}
-              </h3>
-              <p className="text-xs text-emerald-300/80 mt-1 max-w-xl">
-                {currentTourney.description}
-              </p>
-              {currentTourney.status === 'completed' && currentTourney.winnerId && (
-                <p className="mt-2 text-xs font-bold text-amber-300">
-                  🏆 Sieger: {getPlayer(currentTourney.winnerId)?.name || 'Unbekannt'}
-                </p>
+  const teamName = (team: TournamentTeam | undefined) => team
+    ? team.playerIds.map((id) => players.find((player) => player.id === id)?.name ?? 'Unbekannter Spieler').join(' + ')
+    : 'Noch offen';
+  const fixtureTeam = (match: TournamentMatch, side: 'A' | 'B', list: TournamentTeam[]) =>
+    list.find((team) => team.id === sideId(match, side));
+
+  const standings = teams.map((team) => {
+    const completed = current?.matches.filter((match) =>
+      (sideId(match, 'A') === team.id || sideId(match, 'B') === team.id) && winningTeamId(match, teams)
+    ) ?? [];
+    const wins = completed.filter((match) => winningTeamId(match, teams) === team.id).length;
+    const scored = completed.reduce((sum, match) => sum + (sideId(match, 'A') === team.id ? match.scoreA ?? 0 : match.scoreB ?? 0), 0);
+    const conceded = completed.reduce((sum, match) => sum + (sideId(match, 'A') === team.id ? match.scoreB ?? 0 : match.scoreA ?? 0), 0);
+    return { team, games: completed.length, wins, scored, conceded, points: wins * 3 };
+  }).sort((a, b) => b.points - a.points || (b.scored - b.conceded) - (a.scored - a.conceded) || b.scored - a.scored);
+
+  const updateTeamPlayer = (teamId: string, slot: number, playerId: string) => {
+    setDraftTeams((previous) => previous.map((team) => {
+      if (team.id !== teamId) return team;
+      const playerIds = [...team.playerIds];
+      playerIds[slot] = playerId;
+      return { ...team, playerIds };
+    }));
+    setCreateError('');
+  };
+
+  const handleCreate = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (createLock.current) return;
+    setCreateError('');
+    const participantIds = draftTeams.flatMap((team) => team.playerIds);
+    if (!canManage) {
+      setCreateError('Nur die Turnierleitung darf Turniere anlegen.');
+      return;
+    }
+    if (!name.trim() || draftTeams.some((team) => team.playerIds.length !== teamSize || team.playerIds.some((id) => !eligiblePlayers.some((player) => player.id === id)))) {
+      setCreateError('Bitte einen Namen und alle Teammitglieder auswählen.');
+      return;
+    }
+    if (new Set(participantIds).size !== participantIds.length) {
+      setCreateError('Jeder Spieler darf nur in einem Team antreten.');
+      return;
+    }
+    if (type === 'ko' ? !knockoutSizes.includes(draftTeams.length) : draftTeams.length < 2) {
+      setCreateError(type === 'ko' ? 'K.-o.: Bitte 2, 4, 8, 16, 32 oder 64 Teams anlegen.' : 'Mindestens zwei Teams erforderlich.');
+      return;
+    }
+    createLock.current = true;
+    setCreating(true);
+    try {
+      const result = await createTournament({ name: name.trim(), description: description.trim(), type, mode, teams: draftTeams });
+      if (!result.success) {
+        setCreateError(result.message);
+        return;
+      }
+      if (result.tournamentId) setSelectedId(result.tournamentId);
+      setSelectedRound(0);
+      setFeedback(result.message || 'Turnier gespeichert.');
+      setShowCreate(false);
+      setName('');
+      setDescription('');
+      setDraftTeams([]);
+    } catch {
+      setCreateError('Turnier konnte nicht gespeichert werden. Bitte erneut versuchen.');
+    } finally {
+      createLock.current = false;
+      setCreating(false);
+    }
+  };
+
+  const handleScore = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (scoreLock.current || !scoringTournament || !scoringMatch) return;
+    setScoreError('');
+    const a = Number(scoreA);
+    const b = Number(scoreB);
+    if (!canManage || !fixtureTeam(scoringMatch, 'A', scoringTeams) || !fixtureTeam(scoringMatch, 'B', scoringTeams)) {
+      setScoreError('Dieses Spiel kann derzeit nicht gewertet werden.');
+      return;
+    }
+    if (!/^\d+$/.test(scoreA) || !/^\d+$/.test(scoreB) || !Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0 || a > 10 || b > 10 || a === b) {
+      setScoreError('Bitte unterschiedliche ganze Torzahlen zwischen 0 und 10 eingeben.');
+      return;
+    }
+    if (isCorrection && !correctionConfirmed) {
+      setScoreError('Bitte die Auswirkungen der Korrektur bestätigen.');
+      return;
+    }
+    scoreLock.current = true;
+    setSaving(true);
+    try {
+      const result = await advanceTournamentMatch(scoringTournament.id, scoringMatch.id, a, b);
+      if (!result.success) {
+        setScoreError(result.message);
+        return;
+      }
+      setFeedback(result.message || 'Ergebnis gespeichert.');
+      setScoring(null);
+    } catch {
+      setScoreError('Ergebnis konnte nicht gespeichert werden. Bitte erneut versuchen.');
+    } finally {
+      scoreLock.current = false;
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="min-w-0 space-y-5 pb-24">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="flex items-center gap-2 text-2xl font-bold text-white"><Crown className="h-6 w-6 text-amber-400" aria-hidden="true" />Turniere</h2>
+          <p className="text-sm text-emerald-300">Einzel und Doppel mit festen Paaren</p>
+        </div>
+        {canManage && <button type="button" onClick={() => { setCreateError(''); setShowCreate(true); }}
+          className={`${buttonClass} flex items-center justify-center gap-2 bg-amber-400 text-stone-950`}>
+          <Plus className="h-4 w-4" aria-hidden="true" />Neues Turnier
+        </button>}
+      </header>
+      {feedback && <p role="status" className="rounded-xl bg-emerald-950 p-3 text-sm text-emerald-200">{feedback}</p>}
+      {syncError && <p role="alert" className="rounded-xl bg-red-950 p-3 text-sm text-red-200">{syncError}</p>}
+      {!current && isLoading ? (
+        <p role="status" className="felt-card p-5 text-sm text-emerald-200">Turniere werden geladen…</p>
+      ) : !current ? (
+        <div className="felt-card p-5 text-center">
+          <Trophy className="mx-auto mb-3 h-8 w-8 text-amber-400" aria-hidden="true" />
+          <h3 className="font-bold text-white">Noch keine Turniere</h3>
+          <p className="mt-2 text-sm text-emerald-300">{canManage ? 'Lege ein Einzel- oder Doppelturnier an.' : 'Die Turnierleitung kann ein Turnier anlegen.'}</p>
+        </div>
+      ) : (
+        <>
+          <div>
+            <label htmlFor="tournament-selection" className="mb-1 block text-sm text-emerald-300">Turnier auswählen</label>
+            <select id="tournament-selection" value={current.id} onChange={(event) => { setSelectedId(event.target.value); setSelectedRound(0); }} className={fieldClass}>
+              {tournaments.map((tournament) => <option key={tournament.id} value={tournament.id}>{tournament.name} · {tournament.mode}</option>)}
+            </select>
+          </div>
+          <section className="felt-card min-w-0 space-y-5 p-3 sm:p-5" aria-label={current.name}>
+            <div className="space-y-2">
+              <h3 className="break-words text-xl font-bold text-white">{current.name}</h3>
+              <p className="break-words text-sm text-emerald-300">{current.description}</p>
+              <div className="flex flex-wrap gap-2 text-xs text-amber-200">
+                <span>{current.mode === '2v2' ? '2v2 · Feste Paare' : '1v1 · Einzel'}</span>
+                <span>• {teams.length} Teams</span>
+                <span>• {current.type === 'ko' ? 'K.-o.' : current.type === 'groups' ? 'Gruppen · Jeder gegen jeden' : 'Jeder gegen jeden'}</span>
+                <span>• {current.status === 'completed' ? 'Beendet' : current.status === 'running' ? 'Läuft' : 'Geplant'}</span>
+              </div>
+              {current.mode === '2v2' && teams.length === 0 && (
+                <p className="text-sm text-amber-200">Für dieses ältere Doppelturnier sind keine festen Paare gespeichert. Ergebnisse können ohne gespeicherte Teams nicht eingetragen werden.</p>
+              )}
+              {current.status === 'completed' && (current.winnerTeamId || current.winnerId) && (
+                <p className="break-words font-bold text-amber-300">🏆 Sieger: {teamName(teams.find((team) => team.id === (current.winnerTeamId ?? current.winnerId) || team.playerIds.includes(current.winnerId ?? '')))}</p>
               )}
             </div>
-            <div className="flex items-center gap-2 text-xs">
-              <div className="px-3 py-1.5 rounded-lg bg-[#07160f] border border-emerald-800/60 text-emerald-300">
-                Modus: <strong>{currentTourney.mode}</strong>
-              </div>
-              <div className="px-3 py-1.5 rounded-lg bg-[#07160f] border border-emerald-800/60 text-amber-300">
-                Typ: <strong>{currentTourney.type.toUpperCase()}</strong>
-              </div>
-            </div>
-          </div>
 
-          {/* Interactive K.O. Bracket View */}
-          {currentTourney.type === 'ko' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between text-xs font-bold text-emerald-300">
-                <span>Turnierbaum (K.O.-System)</span>
-                <span className="text-[10px] text-emerald-400/60">
-                  Klicke auf ein Match um das Ergebnis einzutragen
-                </span>
-              </div>
-
-              <div className="overflow-x-auto pb-4">
-                <div className="flex items-start gap-8 min-w-[600px] py-2">
-                  {Object.keys(roundsMap).map((roundKey) => {
-                    const roundNum = Number(roundKey);
-                    const roundMatches = roundsMap[roundNum];
-                    const roundTitle =
-                      roundNum === 1
-                        ? 'Viertelfinale'
-                        : roundNum === 2
-                        ? 'Halbfinale'
-                        : roundNum === 3
-                        ? 'Finale'
-                        : `Runde ${roundNum}`;
-
-                    return (
-                      <div key={roundNum} className="flex-1 space-y-4">
-                        <div className="text-center text-xs font-bold uppercase tracking-wider text-amber-400/90 py-1 rounded-lg bg-emerald-950/60 border border-emerald-800/40">
-                          {roundTitle}
-                        </div>
-
-                        <div className="space-y-4">
-                          {roundMatches.map((m) => {
-                            const pA = getPlayer(m.playerAId);
-                            const pB = getPlayer(m.playerBId);
-                            const isDone = m.winnerId !== undefined;
-
-                            return (
-                              <div
-                                key={m.id}
-                                onClick={() => {
-                                  if (pA && pB && !isDone) {
-                                    setActiveScoringMatch(m);
-                                    setScoreA(m.scoreA || 10);
-                                    setScoreB(m.scoreB || 7);
-                                  }
-                                }}
-                                className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
-                                  isDone
-                                    ? 'bg-[#081f14] border-emerald-700/60 shadow'
-                                    : pA && pB
-                                    ? 'bg-emerald-950/80 border-amber-500/40 hover:border-amber-400 hover:scale-[1.02]'
-                                    : 'bg-emerald-950/30 border-emerald-900/40 opacity-60'
-                                }`}
-                              >
-                                {/* Player A */}
-                                <div
-                                  className={`flex items-center justify-between text-xs py-1 px-1.5 rounded ${
-                                    m.winnerId === pA?.id
-                                      ? 'font-bold text-amber-300 bg-amber-500/10'
-                                      : 'text-stone-300'
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-1.5 truncate">
-                                    <span>{pA?.avatar || '👤'}</span>
-                                    <span className="truncate">{pA?.name || 'TBD'}</span>
-                                  </div>
-                                  <span className="font-mono font-bold">
-                                    {m.scoreA !== undefined ? m.scoreA : '-'}
-                                  </span>
-                                </div>
-
-                                <div className="border-t border-emerald-900/40 my-1" />
-
-                                {/* Player B */}
-                                <div
-                                  className={`flex items-center justify-between text-xs py-1 px-1.5 rounded ${
-                                    m.winnerId === pB?.id
-                                      ? 'font-bold text-amber-300 bg-amber-500/10'
-                                      : 'text-stone-300'
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-1.5 truncate">
-                                    <span>{pB?.avatar || '👤'}</span>
-                                    <span className="truncate">{pB?.name || 'TBD'}</span>
-                                  </div>
-                                  <span className="font-mono font-bold">
-                                    {m.scoreB !== undefined ? m.scoreB : '-'}
-                                  </span>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
+            {current.type !== 'ko' && (
+              <div>
+                <h4 className="mb-2 font-bold text-white">Tabelle</h4>
+                <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Turniertabelle, bei Bedarf seitlich scrollen">
+                  <table className="w-full text-left text-xs text-emerald-200">
+                    <thead className="text-emerald-400"><tr>
+                      <th className="p-2" scope="col">#</th><th className="p-2" scope="col">Team</th>
+                      <th className="p-2" scope="col"><abbr title="Spiele">Sp.</abbr></th>
+                      <th className="p-2" scope="col"><abbr title="Siege">S</abbr></th>
+                      <th className="p-2" scope="col">Tore</th><th className="p-2" scope="col"><abbr title="Punkte">Pkt.</abbr></th>
+                    </tr></thead>
+                    <tbody>{standings.map((standing, index) => <tr key={standing.team.id} className="border-t border-emerald-900">
+                      <td className="p-2 text-amber-300">{index + 1}</td>
+                      <th className="min-w-[100px] break-words p-2 font-medium text-white" scope="row">{teamName(standing.team)}</th>
+                      <td className="p-2">{standing.games}</td><td className="p-2">{standing.wins}</td>
+                      <td className="whitespace-nowrap p-2">{standing.scored}:{standing.conceded}</td>
+                      <td className="p-2 font-bold text-amber-300">{standing.points}</td>
+                    </tr>)}</tbody>
+                  </table>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Group and round-robin standings */}
-          {(currentTourney.type === 'groups' || currentTourney.type === 'round_robin') && (
-            <div className="space-y-4">
-              <div className="text-xs font-bold text-emerald-300">
-                Tabelle: {currentTourney.type === 'groups' ? 'Gruppenphase' : 'Jeder gegen Jeden'}
+            <div className="space-y-3">
+              <h4 className="font-bold text-white">Spielplan</h4>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" role="group" aria-label="Runde auswählen">
+                {rounds.map((round) => <button key={round} type="button" aria-pressed={activeRound === round}
+                  onClick={() => setSelectedRound(round)}
+                  className={`${buttonClass} border ${activeRound === round ? 'border-amber-400 bg-amber-400/15 text-amber-200' : 'border-emerald-800 text-emerald-300'}`}>
+                  {roundTitle(round, lastRound, current.type === 'ko')}
+                </button>)}
               </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {currentTourney.matches.map((match) => {
-                  const pA = getPlayer(match.playerAId);
-                  const pB = getPlayer(match.playerBId);
-                  if (!pA || !pB) return null;
+              <h5 className="text-sm font-bold text-amber-300">{activeRound ? roundTitle(activeRound, lastRound, current.type === 'ko') : 'Noch keine Spiele'}</h5>
+              <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+                {current.matches.filter((match) => match.round === activeRound).sort((a, b) => (a.matchIndex ?? 0) - (b.matchIndex ?? 0)).map((match, index) => {
+                  const a = fixtureTeam(match, 'A', teams);
+                  const b = fixtureTeam(match, 'B', teams);
+                  const winner = winningTeamId(match, teams);
                   return (
-                    <button
-                      key={match.id}
-                      type="button"
-                      disabled={match.winnerId !== undefined}
-                      onClick={() => {
-                        setActiveScoringMatch(match);
-                        setScoreA(match.scoreA || 10);
-                        setScoreB(match.scoreB || 7);
-                      }}
-                      className="rounded-xl border border-emerald-800/50 bg-emerald-950/50 p-2 text-left text-xs disabled:opacity-60"
-                    >
-                      <span className="font-semibold text-white">{pA.name}</span>
-                      <span className="px-1.5 text-emerald-400">vs.</span>
-                      <span className="font-semibold text-white">{pB.name}</span>
-                      <span className="float-right font-mono text-amber-300">
-                        {match.winnerId ? `${match.scoreA}:${match.scoreB}` : 'Ergebnis eintragen'}
-                      </span>
-                    </button>
+                    <article key={match.id} className="min-w-0 rounded-xl border border-emerald-800 bg-emerald-950/60 p-3">
+                      <p className="mb-2 text-xs text-emerald-400">Spiel {index + 1} · {winner ? 'Gewertet' : a && b ? 'Bereit' : 'Wartet auf vorherige Runde'}</p>
+                      {([{ team: a, score: match.scoreA }, { team: b, score: match.scoreB }]).map((side, sideIndex) => (
+                        <div key={sideIndex} className={`flex min-w-0 items-start justify-between gap-3 py-2 text-sm ${side.team && side.team.id === winner ? 'font-bold text-amber-300' : 'text-white'}`}>
+                          <span className="min-w-0 break-words">{teamName(side.team)}</span>
+                          <span className="shrink-0 font-mono">{side.score ?? '–'}</span>
+                        </div>
+                      ))}
+                      {canManage && a && b && <button type="button" className={`${buttonClass} mt-2 w-full bg-emerald-800 text-white`}
+                        onClick={() => {
+                          setScoring({ tournamentId: current.id, matchId: match.id });
+                          setScoreA(String(match.scoreA ?? 10));
+                          setScoreB(String(match.scoreB ?? 7));
+                          setCorrectionConfirmed(false);
+                          setScoreError('');
+                        }}>{winner ? 'Ergebnis korrigieren' : 'Ergebnis eintragen'}</button>}
+                    </article>
                   );
                 })}
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
-                  <thead className="bg-[#07160f] text-emerald-400 uppercase text-[10px] font-bold">
-                    <tr>
-                      <th className="p-2.5">Platz</th>
-                      <th className="p-2.5">Spieler</th>
-                      <th className="p-2.5 text-center">Spiele</th>
-                      <th className="p-2.5 text-center">S</th>
-                      <th className="p-2.5 text-center">N</th>
-                      <th className="p-2.5 text-center">Tore</th>
-                      <th className="p-2.5 text-right">Punkte</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-emerald-900/30">
-                    {standings.map((standing, idx) => {
-                      const p = getPlayer(standing.playerId);
-                      return (
-                        <tr key={standing.playerId} className="hover:bg-emerald-950/40">
-                          <td className="p-2.5 font-bold text-amber-400">{idx + 1}</td>
-                          <td className="p-2.5 font-semibold text-white flex items-center gap-2">
-                            <span>{p?.avatar}</span>
-                            <span>{p?.name}</span>
-                          </td>
-                          <td className="p-2.5 text-center font-mono">{standing.games}</td>
-                          <td className="p-2.5 text-center text-neon-lime font-mono">{standing.wins}</td>
-                          <td className="p-2.5 text-center text-red-400 font-mono">{standing.losses}</td>
-                          <td className="p-2.5 text-center font-mono">{standing.scored} : {standing.conceded}</td>
-                          <td className="p-2.5 text-right font-black text-amber-400 text-sm">{standing.points}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
             </div>
-          )}
-        </div>
+            <details className="border-t border-emerald-900 pt-3">
+              <summary className="min-h-[44px] cursor-pointer py-3 text-sm font-bold text-emerald-300">Teams & feste Besetzung ({teams.length})</summary>
+              <ul className="space-y-2 text-sm text-white">{teams.map((team, index) => <li key={team.id} className="break-words rounded-lg bg-emerald-950 p-3">
+                <span className="text-emerald-400">Team {index + 1}: </span>{teamName(team)}
+                <span className="mt-1 block break-all text-[10px] text-emerald-400">ID: {team.id}</span>
+              </li>)}</ul>
+            </details>
+          </section>
+        </>
       )}
 
-      {/* Match Scoring Modal */}
-      {activeScoringMatch && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="felt-card max-w-sm w-full p-5 space-y-4 border border-amber-400/50 shadow-2xl">
-            <h4 className="font-display text-lg font-bold text-white text-center">
-              Turnier-Ergebnis eintragen
-            </h4>
-
-            <div className="flex items-center justify-around py-3">
-              <div className="text-center space-y-1">
-                <div className="text-2xl">{getPlayer(activeScoringMatch.playerAId)?.avatar}</div>
-                <div className="text-xs font-bold text-white">
-                  {getPlayer(activeScoringMatch.playerAId)?.name}
-                </div>
-                <input
-                  type="number"
-                  min="0"
-                  max="10"
-                  value={scoreA}
-                  onChange={(e) => setScoreA(parseInt(e.target.value) || 0)}
-                  className="w-14 h-12 text-center text-2xl font-mono font-black bg-stone-900 border border-emerald-600 rounded-xl text-amber-400 focus:outline-none"
-                />
+      {showCreate && (
+        <Modal title="Neues Turnier" busy={creating} onClose={() => setShowCreate(false)}>
+          <form onSubmit={handleCreate} className="space-y-4" aria-busy={creating}>
+            <fieldset disabled={creating} className="min-w-0 space-y-4">
+              <div><label htmlFor="tournament-name" className="mb-1 block text-sm text-emerald-300">Turniername</label>
+                <input id="tournament-name" required maxLength={100} value={name} onChange={(event) => setName(event.target.value)} className={fieldClass} /></div>
+              <div><label htmlFor="tournament-description" className="mb-1 block text-sm text-emerald-300">Beschreibung</label>
+                <textarea id="tournament-description" maxLength={1000} value={description} onChange={(event) => setDescription(event.target.value)} className={fieldClass} rows={2} /></div>
+              <div><label htmlFor="tournament-type" className="mb-1 block text-sm text-emerald-300">Turnierart</label>
+                <select id="tournament-type" value={type} onChange={(event) => {
+                  const value = event.target.value;
+                  if (value === 'ko' || value === 'groups' || value === 'round_robin') setType(value);
+                }} className={fieldClass}>
+                  <option value="ko">K.-o.-Turnier</option><option value="groups">Gruppen · Jeder gegen jeden</option><option value="round_robin">Jeder gegen jeden</option>
+                </select></div>
+              <div><label htmlFor="tournament-mode" className="mb-1 block text-sm text-emerald-300">Modus</label>
+                <select id="tournament-mode" value={mode} onChange={(event) => {
+                  const value = event.target.value;
+                  if (value !== '1v1' && value !== '2v2') return;
+                  setMode(value);
+                  setDraftTeams([]);
+                  setCreateError('');
+                }} className={fieldClass}>
+                  <option value="1v1">Einzel (1v1)</option><option value="2v2">Doppel (2v2) · Feste Paare</option>
+                </select>
+                {draftTeams.length > 0 && <p className="mt-1 text-xs text-emerald-300">Ein Moduswechsel leert die Teamauswahl.</p>}
               </div>
-
-              <span className="text-xl font-bold text-emerald-400">:</span>
-
-              <div className="text-center space-y-1">
-                <div className="text-2xl">{getPlayer(activeScoringMatch.playerBId)?.avatar}</div>
-                <div className="text-xs font-bold text-white">
-                  {getPlayer(activeScoringMatch.playerBId)?.name}
-                </div>
-                <input
-                  type="number"
-                  min="0"
-                  max="10"
-                  value={scoreB}
-                  onChange={(e) => setScoreB(parseInt(e.target.value) || 0)}
-                  className="w-14 h-12 text-center text-2xl font-mono font-black bg-stone-900 border border-emerald-600 rounded-xl text-amber-400 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setActiveScoringMatch(null)}
-                className="flex-1 py-2 rounded-xl bg-stone-800 text-stone-300 font-semibold text-xs hover:bg-stone-700"
-              >
-                Abbrechen
-              </button>
-              <button
-                type="button"
-                onClick={handleScoreSubmit}
-                className="flex-1 py-2 rounded-xl bg-amber-400 text-stone-950 font-bold text-xs hover:bg-amber-300 shadow"
-              >
-                Speichern
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Create Tournament Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <form
-            onSubmit={handleCreateSubmit}
-            className="felt-card max-w-md w-full p-5 space-y-4 border border-amber-500/50 shadow-2xl max-h-[85vh] overflow-y-auto"
-          >
-            <div className="flex items-center justify-between border-b border-emerald-900/40 pb-2">
-              <h3 className="font-display text-lg font-bold text-white flex items-center gap-2">
-                <Trophy className="w-5 h-5 text-amber-400" />
-                Neues Turnier anlegen
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowCreateModal(false)}
-                className="text-stone-400 hover:text-white font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              {createError && (
-                <div className="rounded-xl border border-red-700/50 bg-red-950/40 p-2.5 text-red-200">
-                  {createError}
-                </div>
-              )}
-              <div>
-                <label className="block text-emerald-300 font-semibold mb-1">Turniername</label>
-                <input
-                  type="text"
-                  required
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder="z.B. Winter-Cup 2026"
-                  className="w-full bg-emerald-950/80 border border-emerald-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-amber-400"
-                />
-              </div>
-
-              <div>
-                <label className="block text-emerald-300 font-semibold mb-1">Beschreibung</label>
-                <input
-                  type="text"
-                  value={newDesc}
-                  onChange={(e) => setNewDesc(e.target.value)}
-                  placeholder="Kurze Regel- oder Terminbeschreibung..."
-                  className="w-full bg-emerald-950/80 border border-emerald-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-amber-400"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-emerald-300 font-semibold mb-1">Turnierart</label>
-                  <select
-                    value={newType}
-                    onChange={(e) => setNewType(e.target.value as any)}
-                    className="w-full bg-emerald-950/80 border border-emerald-800 rounded-xl p-2.5 text-white focus:outline-none"
-                  >
-                    <option value="ko">K.-o.-Turnier</option>
-                    <option value="groups">Gruppenphase</option>
-                    <option value="round_robin">Jeder gegen jeden</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-emerald-300 font-semibold mb-1">Modus</label>
-                  <select
-                    value={newMode}
-                    onChange={(e) => setNewMode(e.target.value as any)}
-                    className="w-full bg-emerald-950/80 border border-emerald-800 rounded-xl p-2.5 text-white focus:outline-none"
-                  >
-                    <option value="1v1">Einzel (1v1)</option>
-                    <option value="2v2" disabled>Doppel (2v2) – folgt</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-emerald-300 font-semibold mb-1">
-                  Teilnehmer auswählen ({selectedParticipants.length} ausgewählt)
-                </label>
-                <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto p-1 bg-emerald-950/40 rounded-xl border border-emerald-900">
-                  {players.map((p) => {
-                    const isChecked = selectedParticipants.includes(p.id);
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedParticipants((prev) =>
-                            isChecked ? prev.filter((id) => id !== p.id) : [...prev, p.id]
-                          );
-                        }}
-                        className={`p-1.5 rounded-lg border text-left text-[11px] flex items-center justify-between transition-colors ${
-                          isChecked
-                            ? 'bg-amber-400/20 border-amber-400 text-amber-200'
-                            : 'bg-emerald-950/40 border-emerald-800/40 text-stone-300'
-                        }`}
-                      >
-                        <span className="truncate">{p.name}</span>
-                        {isChecked && <Check className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
-                      </button>
-                    );
+              <div className="space-y-3">
+                <h4 className="font-bold text-white">Teams zusammenstellen ({draftTeams.length})</h4>
+                <p className="text-xs text-emerald-300">{type === 'ko' ? '2, 4, 8, 16, 32 oder 64 Teams.' : 'Mindestens 2 Teams.'} {mode === '2v2' ? 'Genau zwei feste Spieler pro Team.' : 'Ein Spieler pro Team.'} Jeder Spieler darf nur einmal antreten.</p>
+                {draftTeams.map((team, index) => <fieldset key={team.id} className="min-w-0 space-y-2 rounded-xl border border-emerald-800 p-3">
+                  <legend className="px-1 text-sm font-bold text-amber-200">Team {index + 1}</legend>
+                  {Array.from({ length: teamSize }, (_, slot) => {
+                    const inputId = `team-${team.id}-${slot}`;
+                    return <div key={slot}>
+                      <label htmlFor={inputId} className="mb-1 block text-xs text-emerald-300">Spieler {slot + 1}</label>
+                      <select id={inputId} required value={team.playerIds[slot] ?? ''} onChange={(event) => updateTeamPlayer(team.id, slot, event.target.value)} className={fieldClass}>
+                        <option value="">Spieler auswählen</option>
+                        {eligiblePlayers.map((player) => <option key={player.id} value={player.id}
+                          disabled={draftTeams.some((other) => other.playerIds.some((id, otherSlot) => id === player.id && (other.id !== team.id || otherSlot !== slot)))}>
+                          {player.name}
+                        </option>)}
+                      </select>
+                    </div>;
                   })}
-                </div>
+                  <button type="button" className={`${buttonClass} w-full bg-red-950/60 text-red-200`}
+                    onClick={() => setDraftTeams((previous) => previous.filter((other) => other.id !== team.id))}>Team entfernen</button>
+                </fieldset>)}
+                <button type="button" disabled={draftTeams.length >= 64 || (draftTeams.length + 1) * teamSize > eligiblePlayers.length}
+                  onClick={() => setDraftTeams((previous) => [...previous, { id: crypto.randomUUID(), playerIds: Array.from({ length: teamSize }, () => '') }])}
+                  className={`${buttonClass} w-full border border-emerald-700 text-emerald-200`}>Team hinzufügen</button>
+                {eligiblePlayers.length < teamSize * 2 && <p className="text-sm text-amber-200">Zu wenige aktive Spieler für diesen Modus.</p>}
               </div>
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs shadow-lg"
-            >
-              Turnier jetzt starten
-            </button>
+            </fieldset>
+            {createError && <p role="alert" className="rounded-xl bg-red-950 p-3 text-sm text-red-200">{createError}</p>}
+            <button type="submit" disabled={creating || !canManage} className={`${buttonClass} w-full bg-amber-400 text-stone-950`}>{creating ? 'Wird gespeichert…' : 'Turnier erstellen'}</button>
           </form>
-        </div>
+        </Modal>
+      )}
+      {scoring && (
+        <Modal title={isCorrection ? 'Ergebnis korrigieren' : 'Ergebnis eintragen'} busy={saving} onClose={() => setScoring(null)}>
+          <form onSubmit={handleScore} className="space-y-4" aria-busy={saving}>
+            {!scoringMatch ? <p role="alert" className="text-sm text-red-200">Das Spiel ist nicht mehr verfügbar.</p> : (
+              <fieldset disabled={saving} className="min-w-0 space-y-4">
+                <p className="text-xs text-emerald-300">{scoringTournament?.mode === '2v2' ? 'Doppel · Feste Paare' : 'Einzel'}</p>
+                {(['A', 'B'] as const).map((side) => <div key={side}>
+                  <label htmlFor={`tournament-score-${side}`} className="mb-2 block break-words text-sm font-bold text-white">{teamName(fixtureTeam(scoringMatch, side, scoringTeams))}</label>
+                  <input id={`tournament-score-${side}`} type="number" inputMode="numeric" required min={0} max={10} step={1}
+                    value={side === 'A' ? scoreA : scoreB} onChange={(event) => side === 'A' ? setScoreA(event.target.value) : setScoreB(event.target.value)}
+                    className={`${fieldClass} font-mono`} />
+                </div>)}
+                {isCorrection && <div className="rounded-xl border border-amber-700 bg-amber-950/40 p-3 text-sm text-amber-200">
+                  <p>Eine Korrektur ersetzt das Ligaergebnis. Nachfolgende K.-o.-Spiele und ihre Ligaergebnisse werden zurückgesetzt – auch bereits abgeschlossene Spiele. Die Tabelle wird neu berechnet.</p>
+                  <label className="mt-2 flex min-h-[44px] cursor-pointer items-start gap-3 py-2">
+                    <input type="checkbox" checked={correctionConfirmed} onChange={(event) => setCorrectionConfirmed(event.target.checked)} className="mt-1 h-5 w-5 shrink-0 accent-amber-400" />
+                    <span>Ich bestätige die Korrektur und ihre Auswirkungen.</span>
+                  </label>
+                </div>}
+              </fieldset>
+            )}
+            {scoreError && <p role="alert" className="rounded-xl bg-red-950 p-3 text-sm text-red-200">{scoreError}</p>}
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" disabled={saving} onClick={() => setScoring(null)} className={`${buttonClass} bg-stone-800 text-white`}>Abbrechen</button>
+              <button type="submit" disabled={saving || !canManage || !scoringMatch || (isCorrection && !correctionConfirmed)} className={`${buttonClass} bg-amber-400 text-stone-950`}>{saving ? 'Speichert…' : 'Speichern'}</button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );

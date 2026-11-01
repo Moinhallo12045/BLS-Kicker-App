@@ -20,13 +20,10 @@ export function getTierForLevel(level: number): {
 
 // XP needed to advance from level N to N+1
 export function getXpForNextLevel(level: number): number {
-  if (level >= 50) return 999999;
-  // Scaled curve: 100 at L1, scaling up to ~1500 at L50
-  return Math.round(100 + Math.pow(level, 1.6) * 18);
+  return level === 1 ? 150 : 100 + Math.min(level, 50) * 25;
 }
 
 export const MATCH_XP = {
   PLAYED: 25,
-  WIN: 35,
-  SHUTOUT_BONUS: 20, // e.g. 10:0 or 10:1
+  WIN: 50,
 };

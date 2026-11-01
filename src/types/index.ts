@@ -2,6 +2,7 @@ export type PlayerRole = 'owner' | 'co_owner' | 'admin' | 'organiser' | 'player'
 
 export interface Player {
   id: string;
+  createdAt?: string;
   name: string;
   avatar: string;
   email: string;
@@ -32,6 +33,7 @@ export interface Match {
   id: string;
   mode: MatchMode;
   date: string;
+  createdAt?: string;
   creatorId: string;
   teamA: string[]; // player IDs
   teamB: string[]; // player IDs
@@ -45,6 +47,7 @@ export interface Match {
   disputeProposedScoreA?: number;
   disputeProposedScoreB?: number;
   disputeProposedBy?: string;
+  cancellationRequestedBy?: string;
   eloChangeA: number; // calculated once confirmed
   eloChangeB: number;
   tournamentId?: string;
@@ -53,15 +56,25 @@ export interface Match {
 export type TournamentType = 'ko' | 'groups' | 'round_robin';
 export type TournamentStatus = 'upcoming' | 'running' | 'completed';
 
+export interface TournamentTeam {
+  id: string;
+  playerIds: string[];
+}
+
 export interface TournamentMatch {
   id: string;
-  round: number; // 1 = Quarterfinals, 2 = Semis, etc.
-  matchIndex: number;
-  playerAId?: string;
-  playerBId?: string;
-  scoreA?: number;
-  scoreB?: number;
-  winnerId?: string;
+  round: number;
+  matchIndex?: number;
+  teamAId?: string | null;
+  teamBId?: string | null;
+  winnerTeamId?: string | null;
+  playerAId?: string | null; // Legacy single-player fixtures
+  playerBId?: string | null;
+  scoreA?: number | null;
+  scoreB?: number | null;
+  winnerId?: string | null; // Legacy winner player ID
+  status?: 'pending' | 'completed';
+  leagueMatchId?: string;
 }
 
 export interface Tournament {
@@ -72,9 +85,11 @@ export interface Tournament {
   mode: MatchMode;
   status: TournamentStatus;
   participants: string[]; // player IDs
+  teams?: TournamentTeam[];
   createdAt: string;
   matches: TournamentMatch[];
-  winnerId?: string;
+  winnerId?: string | null;
+  winnerTeamId?: string | null;
 }
 
 export interface Badge {

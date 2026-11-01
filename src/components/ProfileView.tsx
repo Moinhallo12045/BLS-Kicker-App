@@ -4,28 +4,33 @@ import React, { useState } from 'react';
 import { useStore } from '@/lib/store';
 import { ALL_BADGES } from '@/lib/badges';
 import { getTierForLevel } from '@/lib/levels';
-import { 
-  User, 
-  Award, 
-  Flame, 
-  Trophy, 
-  Target, 
-  ShieldCheck, 
-  RefreshCw,
-  Sparkles,
-  LogOut
-} from 'lucide-react';
-
-const AVATAR_OPTIONS = ['🎯', '⚽', '👑', '🔥', '⚡', '🦁', '🎱', '⚔️', '⚓', '🦅', '🚀', '🎲'];
+import { Award, Flame, RefreshCw, LogOut, Loader2 } from 'lucide-react';
+import { supabase } from '@/lib/supabaseClient';
+import { MAX_LEVEL, MIN_RANKED_GAMES, formatBestRank, gamesPlayed, getLeagueRank, runAction } from '@/lib/matchViews';
 
 export function ProfileView() {
   const { currentUser, players, resetToDefaultData, logout } = useStore();
-  const [selectedAvatar, setSelectedAvatar] = useState(currentUser?.avatar || '⚽');
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
 
   if (!currentUser) return null;
 
-  const sorted = [...players].sort((a, b) => b.eloTotal - a.eloTotal);
-  const rank = sorted.findIndex((p) => p.id === currentUser.id) + 1;
+  const rank = getLeagueRank(players, currentUser.id);
+  const isMaxLevel = currentUser.level >= MAX_LEVEL;
+  const xpPercent = isMaxLevel
+    ? 100
+    : Math.min(100, Math.max(0, Math.round((currentUser.xp / Math.max(1, currentUser.xpNextLevel)) * 100)));
+
+  const handleLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    setLogoutError(null);
+    const result = await runAction(logout, { fallbackError: 'Abmelden fehlgeschlagen.', voidIsSuccess: true });
+    if (!result.success) {
+      setLogoutError(result.message);
+      setLoggingOut(false);
+    }
+  };
   const tier = getTierForLevel(currentUser.level);
   const roleLabel = {
     owner: 'Owner',
@@ -42,9 +47,9 @@ export function ProfileView() {
   const quote2v2 = totalMatches2v2 > 0 ? Math.round((currentUser.wins2v2 / totalMatches2v2) * 100) : 0;
 
   return (
-    <div className="space-y-6 pb-24">
+    <div className="space-y-5">
       {/* Profile Header Card */}
-      <div className="wood-panel p-5 relative overflow-hidden">
+      <div className="wood-panel p-4 sm:p-5 relative overflow-hidden">
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 text-center sm:text-left">
           {/* Avatar & Selector */}
           <div className="relative">
@@ -59,9 +64,9 @@ export function ProfileView() {
             </div>
           </div>
 
-          <div className="flex-1">
-            <div className="flex items-center justify-center sm:justify-start gap-2">
-              <h2 className="font-display text-2xl font-bold text-white">
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+              <h2 className="font-display text-2xl font-bold text-white break-words">
                 {currentUser.name}
               </h2>
               {currentUser.role !== 'player' && (
@@ -77,23 +82,37 @@ export function ProfileView() {
 
             <div className="mt-3 flex items-center justify-center sm:justify-start gap-2 flex-wrap">
               <button
-                onClick={logout}
-                className="px-3 py-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 border border-red-700/50 text-xs font-semibold text-red-300 flex items-center gap-1.5 transition-colors"
+                type="button"
+                onClick={handleLogout}
+                disabled={loggingOut}
+                className="min-h-[44px] px-3 rounded-lg disabled:opacity-60 bg-red-950/40 hover:bg-red-900/60 border border-red-700/50 text-xs font-semibold text-red-300 flex items-center gap-1.5 transition-colors"
               >
-                <LogOut className="w-3.5 h-3.5" />
-                Abmelden
+                {loggingOut ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
+                {loggingOut ? 'Wird abgemeldet…' : 'Abmelden'}
               </button>
             </div>
+            {logoutError && (
+              <p role="alert" className="mt-2 text-xs text-red-300 bg-red-950/60 border border-red-700/50 rounded-lg px-2 py-1.5">
+                {logoutError}
+              </p>
+            )}
           </div>
 
           {/* Rank Badge */}
           <div className="text-center sm:text-right">
             <div className="text-[10px] uppercase font-bold text-emerald-400">Liga-Rang</div>
-            <div className="font-display text-3xl font-extrabold text-amber-400">
-              #{rank}
-            </div>
+            {rank ? (
+              <div className="font-display text-3xl font-extrabold text-amber-400">#{rank}</div>
+            ) : (
+              <>
+                <div className="font-display text-3xl font-extrabold text-stone-400">–</div>
+                <div className="text-[10px] text-emerald-300/80">
+                  nicht qualifiziert ({Math.min(gamesPlayed(currentUser), MIN_RANKED_GAMES)}/{MIN_RANKED_GAMES} Spiele)
+                </div>
+              </>
+            )}
             <div className="text-[10px] text-emerald-400/60">
-              Beste Platzierung: #{currentUser.bestRank}
+              Beste Platzierung: {formatBestRank(currentUser.bestRank)}
             </div>
           </div>
         </div>
@@ -101,24 +120,22 @@ export function ProfileView() {
         {/* Level XP Bar */}
         <div className="mt-5 pt-3 border-t border-[#7e4b27]/40">
           <div className="flex justify-between text-xs text-emerald-300 font-semibold mb-1">
-            <span>XP bis Level {currentUser.level + 1}</span>
+            <span>{isMaxLevel ? `Maximallevel ${MAX_LEVEL} erreicht` : `XP bis Level ${currentUser.level + 1}`}</span>
             <span className="text-amber-400 font-mono">
-              {currentUser.xp} / {currentUser.xpNextLevel} XP
+              {isMaxLevel ? 'Max' : `${currentUser.xp} / ${currentUser.xpNextLevel} XP`}
             </span>
           </div>
           <div className="w-full h-2.5 rounded-full bg-stone-900 overflow-hidden border border-[#834f2a]/60">
             <div
               className="h-full bg-gradient-to-r from-amber-500 to-neon-lime transition-all duration-500"
-              style={{
-                width: `${Math.min(100, Math.round((currentUser.xp / currentUser.xpNextLevel) * 100))}%`,
-              }}
+              style={{ width: `${xpPercent}%` }}
             />
           </div>
         </div>
       </div>
 
       {/* Detailed Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
         <div className="felt-card p-3 text-center">
           <div className="text-[10px] uppercase text-emerald-400 font-bold">1v1 Einzel ELO</div>
           <div className="text-xl font-mono font-black text-white mt-1">{currentUser.elo1v1}</div>
@@ -152,7 +169,7 @@ export function ProfileView() {
       </div>
 
       {/* Badges / Abzeichen Collection */}
-      <div className="felt-card p-5 space-y-4">
+      <div className="felt-card p-4 sm:p-5 space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="font-display text-lg font-bold text-white flex items-center gap-2">
@@ -192,20 +209,23 @@ export function ProfileView() {
         </div>
       </div>
 
-      {/* Reset State Option */}
+      {/* Demo reset is only available offline; connected data must never be reset from the client. */}
+      {!supabase && (
       <div className="text-center pt-4">
         <button
+          type="button"
           onClick={() => {
             if (confirm('Möchtest du alle Spieldaten auf die Standard-Demodaten zurücksetzen?')) {
               resetToDefaultData();
             }
           }}
-          className="text-xs text-red-400/60 hover:text-red-400 flex items-center justify-center gap-1.5 mx-auto"
+          className="min-h-[44px] px-3 text-xs text-red-400/60 hover:text-red-400 flex items-center justify-center gap-1.5 mx-auto"
         >
           <RefreshCw className="w-3.5 h-3.5" />
           Demodaten zurücksetzen
         </button>
       </div>
+      )}
     </div>
   );
 }

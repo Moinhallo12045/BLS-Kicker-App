@@ -10,9 +10,9 @@ Eine moderne, hochwertige und mobiloptimierte Web-App (PWA) für geschlossene Ti
    - Begrüßung des angemeldeten Spielers mit Spielerkarte und Uni-Jahrgang
    - ELO-Rating (Einzel & Doppel getrennt sowie Gesamtwertung), Ligapunkte, Level & Rangklasse
    - Interaktiver Level-Fortschrittsbalken (1 bis 50 Level) mit Konfetti-Animation bei Level-Aufstieg
-   - **Aufgaben der Woche** mit XP-Belohnungen
-   - **Abzeichen-Karussell** ("7 von 47")
-   - **Elo-Verlauf** interaktiver Chart (1 Woche, 1 Monat, Alles)
+   - **Aufgaben der Woche** mit echtem Fortschritt aus gewerteten Spielen (keine zusätzlichen XP-Belohnungen)
+   - **Abzeichen-Karussell** mit tatsächlich erspielten Erfolgen
+   - **Elo-Verlauf** aus gespeicherten Wertungen (1 Woche, 1 Monat, Alles)
    - Schnellzugriff zum Eintragen neuer Spiele
 
 2. **Ranglisten-System**:
@@ -32,9 +32,12 @@ Eine moderne, hochwertige und mobiloptimierte Web-App (PWA) für geschlossene Ti
    - **Direkte Einigung**: Bei einem Widerspruch kann ein Gegenvorschlag gemacht und von der Gegenseite angenommen werden; alternativ kann das Spiel im gegenseitigen Einvernehmen gestrichen oder administrativ entschieden werden.
 
 4. **Turniermodus**:
-   - **K.-o.-Turnier**: Interaktiver visueller Turnierbaum mit Viertelfinale, Halbfinale, Finale und automatischem Weiterkommen der Sieger nach Ergebniseingabe.
+   - **Einzel und Doppel**: 1v1 oder 2v2 mit zwei festen Spielern je Team; niemand darf mehreren Teams angehören.
+   - **K.-o.-Turnier**: 2, 4, 8, 16, 32 oder 64 Teams, vertikaler Smartphone-Spielplan und automatisches Weiterkommen der Sieger.
    - **Gruppenphase & Jeder-gegen-Jeden**: Automatische Tabellenberechnung mit Siegen, Niederlagen, Toren und Punkten.
-   - Turnierleitungswerkzeug zum Erstellen neuer Turniere.
+   - Turniere, feste Paarungen und Ergebnisse werden bei konfiguriertem Supabase auf dem Server gespeichert.
+   - Ergebniskorrekturen ersetzen das verknüpfte Ligaspiel und setzen abhängige K.-o.-Runden, Sieger und deren Statistiken zurück. Beide Spieler des Siegerteams erhalten das Turnierabzeichen.
+   - Alte Doppelturniere ohne gespeicherte feste Paare bleiben schreibgeschützt und müssen neu angelegt werden.
 
 5. **Spieler-Community & Head-to-Head Duelle**:
    - Spieler-Verzeichnis mit Suche nach Namen
@@ -56,7 +59,11 @@ Eine moderne, hochwertige und mobiloptimierte Web-App (PWA) für geschlossene Ti
 - **Frontend**: Next.js (Static Export), React, Tailwind CSS, Lucide Icons, Canvas-Confetti
 - **Hosting**: GitHub Pages (Kostenlos über GitHub Actions)
 - **Datenbank & Auth**: Supabase (Free Tier: 500 MB Datenbank, 50.000 monatlich aktive Nutzer)
-- **Offline & Demomodus**: Integrierter LocalStorage-Fallback für sofortige Nutzung ohne Einrichtungsaufwand
+- **Lokaler Demomodus**: Ohne Supabase-Konfiguration werden vorhandene lokale Spieler, Spiele und Turniere genutzt. Bei konfiguriertem Supabase gibt es keinen lokalen Ersatz für fehlgeschlagene Serveraktionen.
+
+### Smartphone und Synchronisierung
+
+Die Hauptnavigation liegt am unteren Bildschirmrand; große Bedienelemente, Safe-Area-Abstände, scrollbare Dialoge und erlaubter Pinch-Zoom unterstützen kleine Displays. Serverdaten werden nach Änderungen, beim Zurückkehren zur App und alle 15 Sekunden bei sichtbarer Seite aktualisiert. Listen werden in Seiten von 250 Datensätzen vollständig geladen. Speicher- und Synchronisierungsfehler werden angezeigt; laufende Schreibaktionen sind gegen doppelte Übermittlung geschützt.
 
 ### Datenbank und Migrationen
 
@@ -64,6 +71,9 @@ Eine moderne, hochwertige und mobiloptimierte Web-App (PWA) für geschlossene Ti
 - Der GitHub-Actions-Workflow [`supabase-migrate.yml`](.github/workflows/supabase-migrate.yml) spielt neue Migrationen automatisch auf das verknüpfte Projekt ein.
 - Die produktive Autorisierung erfolgt serverseitig über Supabase-RLS, Trigger und Security-Definer-Funktionen; Client-Zustände oder LocalStorage vergeben keine Rechte.
 - Match-RPCs lehnen gesperrte Spieler, unbekannte Profile und doppelte Spieler-IDs in Teams serverseitig ab.
+- Profilanlage, Rollenwechsel, Sperren, Moderation und Turnierwertung laufen über autorisierte RPCs. Direkte Client-Schreibzugriffe können weder Statistikwerte noch Auth-Verknüpfung, Rolle oder Sperrstatus manipulieren.
+- Öffentliche Profillisten enthalten keine E-Mail-Adressen oder Auth-Benutzer-IDs. Das eigene Profil wird über `get_my_profile()` bestimmt.
+- ELO verwendet K=32 ohne Torabstandsbonus; die Gesamtwertung ist der gerundete Mittelwert beider Modi. Ein Spiel gibt 25 XP, ein Sieg zusätzlich 50 XP und 3 Ligapunkte. Level 1 benötigt 150 XP, danach gilt `100 + Level * 25`, maximal Level 50.
 - Beim Löschen, Annullieren oder Korrigieren gewerteter Spiele werden ELO (inklusive nachfolgender Spielwertungen), Ligapunkte, Bilanzen, XP, Level, Siegesserie und ELO-Verlauf chronologisch aus den verbleibenden gewerteten Spielen neu aufgebaut. Strittige, bereits gewertete Spiele zählen bis zur Annullierung weiter; ungewertete Spiele zählen nicht.
 - Die Migration `20261101210000_rebuild_match_stats_on_removal.sql` repariert bestehende Statistiken einmalig und übernimmt ältere bestätigte bzw. mit ELO-Änderungen gespeicherte Spiele als gewertet. Ausgangswerte sind ELO 1000 je Modus, Level 1 und 0 XP (erste Levelschwelle: 150 XP); manuell gesetzte Statistikwerte werden ersetzt, Rollen und Abzeichen bleiben unverändert.
 - Für eine leere Übergabe-Datenbank nur Datensätze löschen, niemals Tabellen, RLS oder Funktionen. Owner-Mail und erlaubte Domain anschließend in der Whitelist hinterlegen und die Owner-Rolle einmalig serverseitig setzen.
@@ -71,17 +81,14 @@ Eine moderne, hochwertige und mobiloptimierte Web-App (PWA) für geschlossene Ti
 Die SQL-Regressionen laufen auf einer **leeren, wegwerfbaren PostgreSQL-Datenbank** mit einem Superuser (nicht auf Supabase/Produktion):
 
 ```bash
-psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/match_stats_bootstrap.sql
-psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/match_stats_removal.sql
+TEST_DATABASE_URL=postgresql://postgres@localhost:5432/regression bash scripts/test-database.sh
 ```
 
-Der Bootstrap simuliert Supabase-Auth und spielt Schema sowie bisherige Migrationen ein. Der Regressionstest legt Altdaten an, wendet die neue Migration an und prüft Annullierung, Mehrfachlöschung, Ergebnisänderungen, Berechtigungen und Levelgrenzen.
+Der Runner prüft die historischen Statistik-Migrationen, den vollständigen aktuellen Stand und das Upgrade einer befüllten Datenbank in drei getrennten Datenbanken. Zwei zusätzliche Testdatenbanken werden angelegt und anschließend entfernt; die angegebene Datenbank muss ebenfalls wegwerfbar sein. Abgedeckt sind direkte Manipulationsversuche, Whitelist und Profilanlage, Rollen/Sperren, gegenseitige Annullierung, feste Doppelpaare, Turnierkorrekturen, Abzeichen und Replay-Parität. Ein Skalierungstest enthält 1.000 und 2.000 Spiele.
 
-Die Folgemigration `20261101213500_rebuild_match_achievements.sql` bereinigt zusätzlich die sieben spielabhängigen Abzeichen und die beste Platzierung. Beim chronologischen Neuaufbau werden erreichte Erfolge erneut vergeben; ein später verlorenes Spiel entfernt einen früher weiterhin belegten Erfolg nicht. Die beste Platzierung folgt der Gesamt-ELO-Rangliste ab drei Spielen. Turnier-Abzeichen und unbekannte/manuelle Abzeichen bleiben erhalten, ebenso persönliche Profildaten. Neue Spielwertungen aktualisieren diese Erfolge ebenfalls. Zusätzlicher Regressionstest nach den obigen Befehlen:
+Die Folgemigration `20261101213500_rebuild_match_achievements.sql` bereinigt zusätzlich die sieben spielabhängigen Abzeichen und die beste Platzierung. Beim chronologischen Neuaufbau werden erreichte Erfolge erneut vergeben; ein später verlorenes Spiel entfernt einen früher weiterhin belegten Erfolg nicht. Die beste Platzierung folgt der Gesamt-ELO-Rangliste ab drei Spielen. Turnier-Abzeichen und unbekannte/manuelle Abzeichen bleiben erhalten, ebenso persönliche Profildaten. Neue Spielwertungen aktualisieren diese Erfolge ebenfalls.
 
-```bash
-psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/match_achievements.sql
-```
+Die Migrationen `20261101220000` bis `20261101224000` härten die Client-Verträge, ergänzen persistente feste Turnierteams und gemeinsame autorisierte RPCs und beschleunigen den Replay durch zwischengespeicherte Spielerzustände. Turnierabzeichen folgen nun ebenfalls den aktuell gültigen Turniersiegern; manuelle und unbekannte Abzeichen bleiben erhalten.
 
 ### Sicherheitsstatus
 
@@ -90,6 +97,9 @@ psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/match_achievement
 - Anonyme Ausführung der mutierenden RPCs ist entzogen; reine Trigger-Funktionen sind nicht direkt ausführbar.
 - Die Supabase-Advisor-Warnungen zu authentifizierten `SECURITY DEFINER`-RPCs sind für die von der Anwendung benötigten eingeloggten Aufrufe erwartbar.
 - Die Authentifizierung nutzt OTP/Magic-Link; es werden keine Benutzerpasswörter benötigt.
+- Einladungscodes umgehen die Whitelist nicht. Eine neue Registrierung erfolgt ausschließlich über freigegebene E-Mail und OTP.
+- Next.js ist auf eine gepatchte Version aktualisiert. `npm audit --omit=dev` meldet keine bekannten Schwachstellen; im Entwicklungs-Lint-Tooling bleiben 16 moderate Meldungen wegen einer transitiven `minimatch`-Abhängigkeit. Eine inkompatible Major-Version wird nicht erzwungen.
+- GitHub Pages erlaubt hier keine frei konfigurierbaren HTTP-Sicherheitsheader; die unterstützte Content-Security-Policy ist gesetzt, ersetzt aber keine Prüfung der Hosting-Konfiguration.
 - Nach jeder Migration sollte der Supabase Security/Performance Advisor erneut ausgeführt werden. Ein Live-Penetrationstest und die Prüfung der Dashboard-/Projektkonfiguration sind nicht durch den Quellcode ersetzt.
 
 ---
@@ -97,12 +107,15 @@ psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/match_achievement
 ## 🚀 Schnelleinstieg lokal
 
 ```bash
+npm ci
 # Entwicklungsserver starten
 npm run dev
 
 # Im Browser öffnen:
 http://localhost:3000
 ```
+
+Frontend-Prüfungen: `npm run lint`, `npm run typecheck`, `npm test` und `npm run build`. Der Workflow `.github/workflows/check.yml` führt sie zusammen mit den PostgreSQL-Regressionen bei Pull Requests und Pushes auf `main` aus.
 
 ---
 
@@ -116,6 +129,7 @@ Die Anwendung ist für den statischen Export auf GitHub Pages konfiguriert und e
 3. Wähle unter **Build and deployment > Source**: **GitHub Actions** aus.
 
 ### 2. Live schalten
-1. Sobald du deine Änderungen in den `main`-Branch pushst (`git push origin main`), startet der GitHub Action Workflow automatisch.
-2. Nach ca. 1 Minute ist die Liga unter folgendem Link live:
+1. Sobald Änderungen nach `main` gelangen, starten die Workflows automatisch. Der Migrationsworkflow prüft bei jedem Push idempotent den Datenbankstand; Migrationsläufe werden nicht gegenseitig abgebrochen.
+2. Die Veröffentlichung wartet auf den erfolgreichen Migrationslauf desselben Commits. Bei einem Fehler wird keine inkompatible neue App veröffentlicht.
+3. Danach ist die Liga unter folgendem Link live:
    👉 **`https://moinhallo12045.github.io/BLS-Kicker-App/`**

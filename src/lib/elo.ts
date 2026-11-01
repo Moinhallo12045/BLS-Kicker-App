@@ -28,14 +28,8 @@ export function calculateEloChange(
   const isWinA = scoreA > scoreB;
   const actualA = isWinA ? 1 : 0;
 
-  // Margin of victory multiplier optional (classic or goal diff boost)
-  const goalDiff = Math.abs(scoreA - scoreB);
-  const movMultiplier = Math.log(goalDiff + 1) * 0.4 + 0.8; // subtle dampening
-
-  const delta = Math.round(kFactor * (actualA - expectedA) * Math.max(0.8, Math.min(1.5, movMultiplier)));
-  
-  // Guarantee at least 1 point exchange if winner scored more
-  const finalDelta = isWinA ? Math.max(1, delta) : Math.min(-1, delta);
+  const delta = kFactor * (actualA - expectedA);
+  const finalDelta = Math.sign(delta) * Math.round(Math.abs(delta));
 
   return {
     changeA: finalDelta,
@@ -50,5 +44,5 @@ export function calculateEloChange(
 export function getAverageElo(ratings: number[]): number {
   if (ratings.length === 0) return DEFAULT_ELO;
   const sum = ratings.reduce((acc, curr) => acc + curr, 0);
-  return Math.round(sum / ratings.length);
+  return sum / ratings.length;
 }
