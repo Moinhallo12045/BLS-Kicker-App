@@ -47,7 +47,7 @@ interface StoreContextType {
   // Email Whitelist & Verification Flow
   checkWhitelistAndSendCode: (email: string) => Promise<{ success: boolean; message: string; isExistingPlayer?: boolean }>;
   verifyCode: (email: string, code: string) => Promise<{ success: boolean; message: string; isExistingPlayer?: boolean }>;
-  completeProfileCreation: (params: { email: string; name: string; avatar: string }) => Promise<{ success: boolean; message: string }>;
+  completeProfileCreation: (params: { email: string; name: string; avatar: string; yearJoined: number }) => Promise<{ success: boolean; message: string }>;
   addWhitelistEntry: (pattern: string) => Promise<{ success: boolean; message: string }>;
   removeWhitelistEntry: (id: string) => Promise<{ success: boolean; message: string }>;
   createInviteCode: (code: string, maxUses: number) => { success: boolean; message: string };
@@ -548,16 +548,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     email: rawEmail,
     name,
     avatar,
+    yearJoined,
   }: {
     email: string;
     name: string;
     avatar: string;
+    yearJoined: number;
   }) => {
     const email = rawEmail.trim().toLowerCase();
     const cleanName = name.trim();
 
     if (!cleanName) {
       return { success: false, message: 'Bitte einen Spielernamen eingeben.' };
+    }
+    const currentYear = new Date().getFullYear();
+    if (!Number.isInteger(yearJoined) || yearJoined < currentYear - 100 || yearJoined > currentYear) {
+      return { success: false, message: 'Bitte einen gültigen Jahrgang auswählen.' };
     }
 
     if (!supabase) {
@@ -593,7 +599,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       name: cleanName,
       avatar: avatar || '⚽',
       email,
-      yearJoined: new Date().getFullYear(),
+      yearJoined,
       level: 1,
       xp: 0,
       xpNextLevel: 100,
@@ -618,6 +624,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       name: cleanName,
       avatar: avatar || '⚽',
       email,
+      year_joined: yearJoined,
       role: assignedRole,
     });
     if (profileError) {
@@ -723,7 +730,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (inviteError || !inviteAccepted) {
       return { success: false, message: 'Der Einladungscode ist ungültig oder bereits ausgeschöpft.' };
     }
-    return completeProfileCreation({ email, name, avatar });
+    return completeProfileCreation({ email, name, avatar, yearJoined: new Date().getFullYear() });
   };
 
   const loginPlayer = (nameOrEmail: string) => {
