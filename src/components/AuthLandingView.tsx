@@ -234,11 +234,11 @@ export function AuthLandingView() {
                 maxLength={6}
                 value={verificationCode}
                 onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
-                placeholder="123456"
+                placeholder="· · · · · ·"
                 className="w-full bg-[#0a2014] border-2 border-amber-400/70 rounded-xl py-3 text-center text-2xl font-mono font-black tracking-[0.4em] text-white placeholder-emerald-500/30 focus:outline-none focus:border-amber-400"
               />
               <p className="text-[10px] text-emerald-400/70 text-center mt-1.5">
-                Keine E-Mail erhalten? Bitte Spam-Ordner prüfen oder Freischalt-Code <strong className="text-amber-400">123456</strong> nutzen.
+                Bitte prüfe auch deinen Spam-/Junk-Ordner nach der Bestätigungs-E-Mail.
               </p>
             </div>
 

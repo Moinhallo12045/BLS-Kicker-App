@@ -446,13 +446,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (supabaseErrorMsg) {
       return {
         success: false,
-        message: `Supabase E-Mail-Fehler: "${supabaseErrorMsg}". Du kannst dich alternativ direkt mit Notfall-Code 123456 anmelden.`,
+        message: `Supabase E-Mail-Fehler: "${supabaseErrorMsg}". Bitte überprüfe die Supabase-Konfiguration.`,
       };
     }
 
     const infoNotice = supabase
-      ? `Verifikationscode an ${email} gesendet! (Bitte auch Spam-Ordner prüfen)`
-      : `Code angefordert! (Hinweis: Supabase E-Mail-Dienst ist noch nicht aktiv - nutze Freischalt-Code 123456)`;
+      ? `Verifikationscode an ${email} gesendet! Bitte prüfe dein Postfach (auch Spam-Ordner).`
+      : `Verbindung zu Supabase fehlt: Bitte überprüfe deine GitHub Secrets.`;
 
     return {
       success: true,
@@ -468,13 +468,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     let isCodeValid = false;
 
-    // 1. Master Bypass Code (emergency / test code)
-    if (cleanCode === '123456') {
-      isCodeValid = true;
-    }
-
-    // 2. Verify against Supabase OTP if connected
-    if (!isCodeValid && supabase) {
+    // 1. Verify against Supabase OTP if connected
+    if (supabase) {
       try {
         const { error } = await supabase.auth.verifyOtp({
           email,
@@ -491,7 +486,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // 3. Verify against locally generated code
+    // 2. Verify against locally generated code
     if (!isCodeValid) {
       const record = pendingVerifications[email];
       if (record && record.code === cleanCode) {
@@ -506,7 +501,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (!isCodeValid) {
       return {
         success: false,
-        message: 'Ungültiger Code. Bitte Postfach prüfen oder Notfall-Code 123456 eingeben.',
+        message: 'Ungültiger oder abgelaufener Verifikationscode. Bitte prüfe dein Postfach.',
       };
     }
 
