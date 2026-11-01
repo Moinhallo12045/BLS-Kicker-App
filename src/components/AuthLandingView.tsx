@@ -124,15 +124,17 @@ export function AuthLandingView() {
   };
 
   // STEP 3: Profil anlegen (Spielername & Avatar)
-  const handleProfileSubmit = (e: React.FormEvent) => {
+  const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setIsLoading(true);
 
-    const res = completeProfileCreation({
+    const res = await completeProfileCreation({
       email,
       name,
       avatar,
     });
+    setIsLoading(false);
 
     if (!res.success) {
       setErrorMsg(res.message);

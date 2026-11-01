@@ -13,6 +13,7 @@ import { INITIAL_WEEKLY_QUESTS } from './badges';
 import { calculateEloChange, getAverageElo } from './elo';
 import { getXpForNextLevel, MATCH_XP } from './levels';
 import { supabase } from './supabaseClient';
+import type { Session } from '@supabase/supabase-js';
 
 export const MASTER_ADMIN_EMAILS: string[] = (
   process.env.NEXT_PUBLIC_ADMIN_EMAIL || ''
@@ -46,14 +47,14 @@ interface StoreContextType {
   acceptDisputeResolution: (matchId: string) => void;
   cancelMatchByMutualAgreement: (matchId: string) => void;
   adminResolveDispute: (matchId: string, action: 'confirm' | 'cancel', adjustedScoreA?: number, adjustedScoreB?: number) => void;
-  registerWithInvite: (params: { name: string; email: string; inviteCode: string; avatar: string }) => { success: boolean; message: string };
+  registerWithInvite: (params: { name: string; email: string; inviteCode: string; avatar: string }) => Promise<{ success: boolean; message: string }>;
   loginPlayer: (nameOrEmail: string) => { success: boolean; message: string };
   logout: () => void;
   updatePlayerRole: (playerId: string, newRole: PlayerRole) => void;
   // Email Whitelist & Verification Flow
   checkWhitelistAndSendCode: (email: string) => Promise<{ success: boolean; message: string; isExistingPlayer?: boolean }>;
   verifyCode: (email: string, code: string) => Promise<{ success: boolean; message: string; isExistingPlayer?: boolean }>;
-  completeProfileCreation: (params: { email: string; name: string; avatar: string }) => { success: boolean; message: string };
+  completeProfileCreation: (params: { email: string; name: string; avatar: string }) => Promise<{ success: boolean; message: string }>;
   addWhitelistEntry: (pattern: string) => { success: boolean; message: string };
   removeWhitelistEntry: (id: string) => void;
   createInviteCode: (code: string, maxUses: number) => { success: boolean; message: string };
@@ -73,8 +74,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [quests, setQuests] = useState<WeeklyQuest[]>(INITIAL_WEEKLY_QUESTS);
   const [inviteCodes, setInviteCodes] = useState<InviteCode[]>(INITIAL_INVITE_CODES);
   const [whitelist, setWhitelist] = useState<WhitelistEntry[]>(INITIAL_WHITELIST);
-  const [pendingVerifications, setPendingVerifications] = useState<Record<string, { code: string; expiresAt: number }>>({});
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [authIdentity, setAuthIdentity] = useState<{ email: string; role: PlayerRole } | null>(null);
   const [newLevelUnlocked, setNewLevelUnlocked] = useState<{ player: Player; oldLevel: number; newLevel: number } | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
 
@@ -90,7 +91,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (parsed.quests) setQuests(parsed.quests);
         if (parsed.inviteCodes) setInviteCodes(parsed.inviteCodes);
         if (parsed.whitelist) setWhitelist(parsed.whitelist);
-        if (parsed.currentUserId) setCurrentUserId(parsed.currentUserId);
+        if (parsed.currentUserId && !supabase) setCurrentUserId(parsed.currentUserId);
       }
     } catch (e) {
       console.warn('Failed to parse localStorage state:', e);
@@ -119,16 +120,73 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, [players, matches, tournaments, quests, inviteCodes, whitelist, currentUserId, isHydrated]);
 
-  const currentUser = players.find((p) => p.id === currentUserId) || null;
+  useEffect(() => {
+    const client = supabase;
+    if (!client) {
+      setAuthIdentity(null);
+      return;
+    }
+
+    let active = true;
+    const syncAuthIdentity = async (session: Session | null) => {
+      if (!session?.user?.email || !active) {
+        setAuthIdentity(null);
+        setCurrentUserId(null);
+        return;
+      }
+
+      const email = session.user.email.trim().toLowerCase();
+      const { data: profile } = await client
+        .from('profiles')
+        .select('role')
+        .eq('auth_user_id', session.user.id)
+        .maybeSingle();
+
+      if (active) {
+        setAuthIdentity({ email, role: (profile?.role as PlayerRole) || 'player' });
+      }
+    };
+
+    client.auth.getSession().then(({ data: { session } }) => {
+      void syncAuthIdentity(session);
+    });
+    const { data: authListener } = client.auth.onAuthStateChange((_event, session) => {
+      void syncAuthIdentity(session);
+    });
+
+    return () => {
+      active = false;
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  const localUser = players.find((p) => p.id === currentUserId) || null;
+  const authenticatedPlayer = authIdentity
+    ? players.find((p) => p.email.toLowerCase() === authIdentity.email)
+    : null;
+  const currentUser = supabase
+    ? authenticatedPlayer
+      ? { ...authenticatedPlayer, role: authIdentity!.role }
+      : null
+    : localUser;
 
   const clearLevelModal = () => setNewLevelUnlocked(null);
 
   const switchUser = (playerId: string) => {
+    if (supabase) return;
     setCurrentUserId(playerId);
   };
 
   const setCurrentUser = (player: Player | null) => {
-    if (player) setCurrentUserId(player.id);
+    if (!player) {
+      setCurrentUserId(null);
+      return;
+    }
+    if (supabase) {
+      if (authIdentity?.email === player.email.toLowerCase()) setCurrentUserId(player.id);
+      return;
+    }
+    setCurrentUserId(player.id);
   };
 
   const submitMatch = ({
@@ -393,19 +451,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       return { success: false, message: 'Bitte eine gültige E-Mail-Adresse eingeben.' };
     }
 
-    // Check whitelist
-    const isWhitelisted =
-      players.length === 0 || // First user is always permitted to initialize the league
-      MASTER_ADMIN_EMAILS.some((adm) => adm.toLowerCase() === email) ||
-      whitelist.some((w) => {
-        const p = w.pattern.toLowerCase().trim();
-        if (p.startsWith('@')) {
-          return email.endsWith(p);
-        }
-        return email === p;
-      });
+    if (!supabase) {
+      return {
+        success: false,
+        message: 'Die sichere Authentifizierung ist derzeit nicht konfiguriert.',
+      };
+    }
 
-    if (!isWhitelisted) {
+    const { data: whitelistResult, error: whitelistError } = await supabase.rpc(
+      'is_email_whitelisted',
+      { candidate_email: email }
+    );
+    if (whitelistError || !whitelistResult) {
       return {
         success: false,
         message: 'Diese E-Mail ist nicht freigeschaltet. Bitte wende dich an den Spielleiter/Admin.',
@@ -414,58 +471,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     const existingPlayer = players.find((p) => p.email.toLowerCase() === email);
 
-    // Generate cryptographically secure 6 digit code
-    let code = '';
-    if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
-      const randomValues = new Uint32Array(1);
-      window.crypto.getRandomValues(randomValues);
-      code = (100000 + (randomValues[0] % 900000)).toString();
-    } else {
-      code = Math.floor(100000 + Math.random() * 900000).toString();
-    }
-    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 mins
-
-    setPendingVerifications((prev) => ({
-      ...prev,
-      [email]: { code, expiresAt },
-    }));
-
-    let supabaseErrorMsg: string | null = null;
-
-    // If Supabase is connected, trigger official Supabase OTP
-    if (supabase) {
-      try {
-        const { error } = await supabase.auth.signInWithOtp({
-          email,
-          options: {
-            shouldCreateUser: true,
-          },
-        });
-        if (error) {
-          console.warn('Supabase signInWithOtp error:', error.message);
-          supabaseErrorMsg = error.message;
-        }
-      } catch (err: any) {
-        console.warn('Supabase signInWithOtp exception:', err);
-        supabaseErrorMsg = err?.message || 'Verbindung zu Supabase fehlgeschlagen';
-      }
-    }
-
-    if (supabaseErrorMsg) {
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { shouldCreateUser: true },
+    });
+    if (error) {
       return {
         success: false,
-        message: `Supabase E-Mail-Fehler: "${supabaseErrorMsg}". Bitte überprüfe die Supabase-Konfiguration.`,
+        message: `Supabase E-Mail-Fehler: "${error.message}". Bitte überprüfe die Supabase-Konfiguration.`,
       };
     }
-
-    const infoNotice = supabase
-      ? `Verifikationscode an ${email} gesendet! Bitte prüfe dein Postfach (auch Spam-Ordner).`
-      : `Verbindung zu Supabase fehlt: Bitte überprüfe deine GitHub Secrets.`;
 
     return {
       success: true,
       isExistingPlayer: Boolean(existingPlayer),
-      message: infoNotice,
+      message: `Verifikationscode an ${email} gesendet! Bitte prüfe dein Postfach (auch Spam-Ordner).`,
     };
   };
 
@@ -473,50 +493,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const email = rawEmail.trim().toLowerCase();
     const cleanCode = enteredCode.trim();
 
-    let isCodeValid = false;
-
-    // 1. Verify against Supabase OTP if connected
-    if (supabase) {
-      try {
-        let { error } = await supabase.auth.verifyOtp({
-          email,
-          token: cleanCode,
-          type: 'email',
-        });
-        // Fallback for new signups where Supabase might expect type: 'signup'
-        if (error) {
-          const signupRes = await supabase.auth.verifyOtp({
-            email,
-            token: cleanCode,
-            type: 'signup',
-          });
-          if (!signupRes.error) {
-            error = null;
-          }
-        }
-        if (!error) {
-          isCodeValid = true;
-        } else {
-          console.warn('Supabase verifyOtp note:', error.message);
-        }
-      } catch (err) {
-        console.warn('Supabase verifyOtp exception:', err);
-      }
+    if (!supabase) {
+      return { success: false, message: 'Die sichere Authentifizierung ist derzeit nicht konfiguriert.' };
     }
 
-    // 2. Verify against locally generated code
-    if (!isCodeValid) {
-      const record = pendingVerifications[email];
-      if (record && record.code === cleanCode) {
-        if (Date.now() <= record.expiresAt) {
-          isCodeValid = true;
-        } else {
-          return { success: false, message: 'Der Code ist abgelaufen. Bitte neu anfordern.' };
-        }
-      }
-    }
-
-    if (!isCodeValid) {
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token: cleanCode,
+      type: 'email',
+    });
+    if (error) {
       return {
         success: false,
         message: 'Ungültiger oder abgelaufener Verifikationscode. Bitte prüfe dein Postfach.',
@@ -547,7 +533,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     };
   };
 
-  const completeProfileCreation = ({
+  const completeProfileCreation = async ({
     email: rawEmail,
     name,
     avatar,
@@ -563,6 +549,24 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       return { success: false, message: 'Bitte einen Spielernamen eingeben.' };
     }
 
+    if (!supabase) {
+      return { success: false, message: 'Die sichere Authentifizierung ist derzeit nicht konfiguriert.' };
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const session = sessionData.session;
+    if (!session?.user?.id || session.user.email?.toLowerCase() !== email) {
+      return { success: false, message: 'Bitte bestätige zuerst diese E-Mail-Adresse.' };
+    }
+
+    const { data: whitelisted, error: whitelistError } = await supabase.rpc(
+      'is_email_whitelisted',
+      { candidate_email: email }
+    );
+    if (whitelistError || !whitelisted) {
+      return { success: false, message: 'Diese E-Mail ist nicht freigeschaltet.' };
+    }
+
     const existing = players.find(
       (p) => p.name.toLowerCase() === cleanName.toLowerCase() || p.email.toLowerCase() === email
     );
@@ -570,10 +574,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       return { success: false, message: 'Dieser Spielername oder diese E-Mail ist bereits vergeben.' };
     }
 
-    const newPlayerId = 'p_' + Date.now();
-    const isFirstUser = players.length === 0;
-    const isMasterAdmin = MASTER_ADMIN_EMAILS.some((adm) => adm.toLowerCase() === email);
-    const assignedRole: PlayerRole = (isMasterAdmin || isFirstUser) ? 'admin' : 'player';
+    const newPlayerId = session.user.id;
+    const assignedRole: PlayerRole = 'player';
 
     const newPlayer: Player = {
       id: newPlayerId,
@@ -599,27 +601,24 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       eloHistory: [{ date: new Date().toISOString().split('T')[0], elo: 1000 }],
     };
 
+    const { error: profileError } = await supabase.from('profiles').insert({
+      id: newPlayerId,
+      auth_user_id: session.user.id,
+      name: cleanName,
+      avatar: avatar || '⚽',
+      email,
+      role: assignedRole,
+    });
+    if (profileError) {
+      return { success: false, message: `Profil konnte nicht erstellt werden: ${profileError.message}` };
+    }
+
     setPlayers((prev) => [...prev, newPlayer]);
     setCurrentUserId(newPlayerId);
 
-    // If first user or master admin, make sure their email is also in whitelist
-    if ((isFirstUser || isMasterAdmin) && !whitelist.some((w) => w.pattern.toLowerCase() === email)) {
-      setWhitelist((prev) => [
-        ...prev,
-        {
-          id: 'wl_' + Date.now(),
-          pattern: email,
-          addedBy: 'system',
-          createdAt: new Date().toISOString().split('T')[0],
-        },
-      ]);
-    }
-
     return {
       success: true,
-      message: assignedRole === 'admin'
-        ? 'Profil erstellt! Du bist als Administrator der Liga angemeldet.'
-        : 'Profil erfolgreich erstellt! Willkommen in der Liga.',
+      message: 'Profil erfolgreich erstellt! Willkommen in der Liga.',
     };
   };
 
@@ -654,7 +653,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Backwards-compatible legacy helpers
-  const registerWithInvite = ({
+  const registerWithInvite = async ({
     name,
     email,
     inviteCode,
@@ -665,6 +664,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     inviteCode: string;
     avatar: string;
   }) => {
+    if (!inviteCode.trim()) {
+      return { success: false, message: 'Ein Einladungscode ist erforderlich.' };
+    }
+    if (!supabase) {
+      return { success: false, message: 'Die sichere Authentifizierung ist derzeit nicht konfiguriert.' };
+    }
+    const { data: inviteAccepted, error: inviteError } = await supabase.rpc(
+      'consume_invite_code',
+      { candidate_code: inviteCode }
+    );
+    if (inviteError || !inviteAccepted) {
+      return { success: false, message: 'Der Einladungscode ist ungültig oder bereits ausgeschöpft.' };
+    }
     return completeProfileCreation({ email, name, avatar });
   };
 
