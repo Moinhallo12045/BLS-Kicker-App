@@ -15,7 +15,8 @@ export function AdminView() {
     adminResolveDispute,
     whitelist,
     addWhitelistEntry,
-    removeWhitelistEntry
+    removeWhitelistEntry,
+    updatePlayerRole
   } = useStore();
 
   const [newCode, setNewCode] = useState('');
@@ -345,21 +346,27 @@ export function AdminView() {
                 <span className="text-[10px] text-emerald-400/60">({p.email})</span>
               </div>
 
-              <span
-                className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                  p.role === 'admin'
-                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                    : p.role === 'tournament_director'
-                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                    : 'bg-emerald-950 text-emerald-400'
-                }`}
-              >
-                {p.role === 'admin'
-                  ? 'Administrator'
-                  : p.role === 'tournament_director'
-                  ? 'Turnierleiter'
-                  : 'Spieler'}
-              </span>
+              <div className="flex items-center gap-2">
+                <select
+                  value={p.role}
+                  disabled={p.id === currentUser?.id}
+                  onChange={(e) => {
+                    updatePlayerRole(p.id, e.target.value as PlayerRole);
+                    setNotification(`Rolle von ${p.name} geändert zu: ${e.target.value}`);
+                    setTimeout(() => setNotification(null), 3000);
+                  }}
+                  className="bg-emerald-950 border border-emerald-700/60 rounded-lg px-2 py-1 text-xs text-amber-300 font-bold focus:outline-none cursor-pointer"
+                  title={p.id === currentUser?.id ? 'Eigene Admin-Rolle kann nicht entzogen werden' : 'Rolle ändern'}
+                >
+                  <option value="player" className="bg-slate-900 text-white">Spieler</option>
+                  <option value="tournament_director" className="bg-slate-900 text-blue-300">Turnierleiter</option>
+                  <option value="admin" className="bg-slate-900 text-amber-400">Administrator</option>
+                </select>
+
+                {p.id === currentUser?.id && (
+                  <span className="text-[10px] text-amber-400/80 font-bold">(Du)</span>
+                )}
+              </div>
             </div>
           ))}
         </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Player, Match, Tournament, WeeklyQuest, InviteCode, MatchMode, WhitelistEntry } from '@/types';
+import { Player, PlayerRole, Match, Tournament, WeeklyQuest, InviteCode, MatchMode, WhitelistEntry } from '@/types';
 import { 
   INITIAL_PLAYERS, 
   INITIAL_MATCHES, 
@@ -13,6 +13,11 @@ import { INITIAL_WEEKLY_QUESTS } from './badges';
 import { calculateEloChange, getAverageElo } from './elo';
 import { getXpForNextLevel, MATCH_XP } from './levels';
 import { supabase } from './supabaseClient';
+
+export const MASTER_ADMIN_EMAILS: string[] = [
+  'rune.kamprolf@otto.de',
+  (process.env.NEXT_PUBLIC_ADMIN_EMAIL || '').toLowerCase().trim(),
+].filter(Boolean);
 
 interface StoreContextType {
   currentUser: Player | null;
@@ -42,6 +47,7 @@ interface StoreContextType {
   registerWithInvite: (params: { name: string; email: string; inviteCode: string; avatar: string }) => { success: boolean; message: string };
   loginPlayer: (nameOrEmail: string) => { success: boolean; message: string };
   logout: () => void;
+  updatePlayerRole: (playerId: string, newRole: PlayerRole) => void;
   // Email Whitelist & Verification Flow
   checkWhitelistAndSendCode: (email: string) => Promise<{ success: boolean; code?: string; message: string; isExistingPlayer?: boolean }>;
   verifyCode: (email: string, code: string) => { success: boolean; message: string; isExistingPlayer?: boolean };
@@ -449,6 +455,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     const existingPlayer = players.find((p) => p.email.toLowerCase() === email);
     if (existingPlayer) {
+      // Auto-upgrade to admin if master admin email
+      const isMasterAdmin = MASTER_ADMIN_EMAILS.some((adm) => adm.toLowerCase() === email);
+      if (isMasterAdmin && existingPlayer.role !== 'admin') {
+        setPlayers((prev) =>
+          prev.map((p) => (p.id === existingPlayer.id ? { ...p, role: 'admin' } : p))
+        );
+      }
       setCurrentUserId(existingPlayer.id);
       return {
         success: true,
@@ -489,6 +502,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     const newPlayerId = 'p_' + Date.now();
     const isFirstUser = players.length === 0;
+    const isMasterAdmin = MASTER_ADMIN_EMAILS.some((adm) => adm.toLowerCase() === email);
+    const assignedRole: PlayerRole = (isMasterAdmin || isFirstUser) ? 'admin' : 'player';
+
     const newPlayer: Player = {
       id: newPlayerId,
       name: cleanName,
@@ -508,7 +524,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       losses2v2: 0,
       currentStreak: 0,
       bestRank: players.length + 1,
-      role: isFirstUser ? 'admin' : 'player',
+      role: assignedRole,
       badges: [],
       eloHistory: [{ date: new Date().toISOString().split('T')[0], elo: 1000 }],
     };
@@ -516,8 +532,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setPlayers((prev) => [...prev, newPlayer]);
     setCurrentUserId(newPlayerId);
 
-    // If first user, make sure their email is also in whitelist
-    if (isFirstUser && !whitelist.some((w) => w.pattern.toLowerCase() === email)) {
+    // If first user or master admin, make sure their email is also in whitelist
+    if ((isFirstUser || isMasterAdmin) && !whitelist.some((w) => w.pattern.toLowerCase() === email)) {
       setWhitelist((prev) => [
         ...prev,
         {
@@ -531,10 +547,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     return {
       success: true,
-      message: isFirstUser
-        ? 'Profil erstellt! Du bist als erster Spieler registriert und Administrator der Liga.'
+      message: assignedRole === 'admin'
+        ? 'Profil erstellt! Du bist als Administrator der Liga angemeldet.'
         : 'Profil erfolgreich erstellt! Willkommen in der Liga.',
     };
+  };
+
+  const updatePlayerRole = (playerId: string, newRole: PlayerRole) => {
+    setPlayers((prev) =>
+      prev.map((p) => (p.id === playerId ? { ...p, role: newRole } : p))
+    );
   };
 
   const addWhitelistEntry = (rawPattern: string) => {
@@ -746,6 +768,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         registerWithInvite,
         loginPlayer,
         logout,
+        updatePlayerRole,
         checkWhitelistAndSendCode,
         verifyCode,
         completeProfileCreation,
