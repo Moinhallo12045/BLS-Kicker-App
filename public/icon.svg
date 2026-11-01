@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="feltGrad" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#1b4d33"/>
+      <stop offset="100%" stop-color="#081a10"/>
+    </radialGradient>
+    <linearGradient id="woodGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5a3116"/>
+      <stop offset="100%" stop-color="#241308"/>
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+  </defs>
+  <!-- Wood Frame Outer -->
+  <rect x="16" y="16" width="480" height="480" rx="96" fill="url(#woodGrad)" stroke="#78421c" stroke-width="12"/>
+  <!-- Felt Inset -->
+  <rect x="48" y="48" width="416" height="416" rx="72" fill="url(#feltGrad)" stroke="#22c55e" stroke-width="4" stroke-opacity="0.4"/>
+  <!-- Foosball Table Center Lines -->
+  <circle cx="256" cy="256" r="64" fill="none" stroke="#ffffff" stroke-opacity="0.15" stroke-width="6"/>
+  <line x1="48" y1="256" x2="464" y2="256" stroke="#ffffff" stroke-opacity="0.15" stroke-width="6"/>
+  <!-- Foosball Ball / Trophy Symbol -->
+  <circle cx="256" cy="256" r="48" fill="#ffffff" filter="drop-shadow(0 4px 12px rgba(0,0,0,0.5))"/>
+  <circle cx="256" cy="256" r="44" fill="#f8fafc"/>
+  <polygon points="256,230 268,245 285,245 272,256 277,272 256,262 235,272 240,256 227,245 244,245" fill="url(#goldGrad)"/>
+  <!-- Crown / Star -->
+  <circle cx="256" cy="170" r="12" fill="url(#goldGrad)"/>
+</svg>

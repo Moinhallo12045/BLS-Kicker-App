@@ -1,0 +1,17 @@
+{
+  "name": "Kicker League – Digitale Tischkicker-Liga",
+  "short_name": "Kicker League",
+  "description": "Digitale Liga- und Turnierverwaltung für deine Tischkicker-Community",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07150e",
+  "theme_color": "#091b12",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

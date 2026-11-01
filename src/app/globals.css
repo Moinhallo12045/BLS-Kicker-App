@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --felt-bg-gradient: radial-gradient(circle at 50% 20%, #153926 0%, #0d2519 50%, #07150e 100%);
+    --wood-texture: linear-gradient(180deg, #4d2b15 0%, #341c0d 50%, #241308 100%);
+    --wood-rim-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.25), inset 0 -2px 4px rgba(0, 0, 0, 0.7), 0 8px 24px rgba(0, 0, 0, 0.8);
+  }
+
+  body {
+    background: #07150e;
+    background-image: var(--felt-bg-gradient);
+    background-attachment: fixed;
+    color: #e2e8f0;
+    min-height: 100vh;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+}
+
+/* Custom Wood Panel Card */
+.wood-panel {
+  background: var(--wood-texture);
+  border: 1px solid #663b1d;
+  box-shadow: var(--wood-rim-shadow);
+  border-radius: 1.25rem;
+  position: relative;
+}
+
+.wood-panel::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: 1.2rem;
+  border: 1px solid rgba(255, 200, 100, 0.15);
+  pointer-events: none;
+}
+
+/* Felt Card Container */
+.felt-card {
+  background: linear-gradient(180deg, rgba(16, 46, 31, 0.85) 0%, rgba(9, 27, 18, 0.95) 100%);
+  border: 1px solid rgba(52, 114, 82, 0.35);
+  backdrop-filter: blur(12px);
+  border-radius: 1rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.felt-card-highlight {
+  background: linear-gradient(180deg, rgba(22, 63, 42, 0.95) 0%, rgba(13, 38, 25, 0.98) 100%);
+  border: 1px solid rgba(34, 197, 94, 0.45);
+  box-shadow: 0 0 20px rgba(34, 197, 94, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+/* Serif Title Styling */
+.font-display {
+  font-family: 'Playfair Display', Georgia, Cambria, serif;
+  letter-spacing: -0.01em;
+}
+
+/* Gold Gradient Text */
+.text-gold-gradient {
+  background: linear-gradient(180deg, #fef08a 0%, #f59e0b 60%, #b45309 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(34, 197, 94, 0.3);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(34, 197, 94, 0.6);
+}
