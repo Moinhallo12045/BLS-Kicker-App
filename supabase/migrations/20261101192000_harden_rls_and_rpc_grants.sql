@@ -66,15 +66,23 @@ CREATE POLICY "Beteiligte Spieler und Admins dürfen Matches aktualisieren"
     )
   );
 
-ALTER POLICY "Nutzer dürfen eigenes Profil bei Registrierung anlegen"
+DROP POLICY IF EXISTS "Nutzer dürfen eigenes Profil bei Registrierung anlegen"
+  ON public.profiles;
+CREATE POLICY "Nutzer dürfen eigenes Profil bei Registrierung anlegen"
   ON public.profiles
+  FOR INSERT
+  TO authenticated
   WITH CHECK (
     (SELECT auth.uid()) = auth_user_id
     AND (role = 'player' OR (SELECT public.is_master_admin()))
   );
 
-ALTER POLICY "Nutzer dürfen eigenes Profil bearbeiten ohne Rollen-Eskalation"
+DROP POLICY IF EXISTS "Nutzer dürfen eigenes Profil bearbeiten ohne Rollen-Eskalation"
+  ON public.profiles;
+CREATE POLICY "Nutzer dürfen eigenes Profil bearbeiten ohne Rollen-Eskalation"
   ON public.profiles
+  FOR UPDATE
+  TO authenticated
   USING (
     (SELECT auth.uid()) = auth_user_id
     OR (SELECT public.is_admin())
@@ -91,13 +99,21 @@ ALTER POLICY "Nutzer dürfen eigenes Profil bearbeiten ohne Rollen-Eskalation"
     )
   );
 
-ALTER POLICY "Nur Admins dürfen Whitelist bearbeiten"
+DROP POLICY IF EXISTS "Nur Admins dürfen Whitelist bearbeiten"
+  ON public.whitelist;
+CREATE POLICY "Nur Admins dürfen Whitelist bearbeiten"
   ON public.whitelist
+  FOR ALL
+  TO authenticated
   USING ((SELECT public.is_admin()))
   WITH CHECK ((SELECT public.is_admin()));
 
-ALTER POLICY "Admins und Turnierleiter dürfen Turniere verwalten"
+DROP POLICY IF EXISTS "Admins und Turnierleiter dürfen Turniere verwalten"
+  ON public.tournaments;
+CREATE POLICY "Admins und Turnierleiter dürfen Turniere verwalten"
   ON public.tournaments
+  FOR ALL
+  TO authenticated
   USING (
     (SELECT public.is_admin())
     OR EXISTS (
@@ -117,7 +133,11 @@ ALTER POLICY "Admins und Turnierleiter dürfen Turniere verwalten"
     )
   );
 
-ALTER POLICY "Nur Admins dürfen Einladungscodes anlegen und bearbeiten"
+DROP POLICY IF EXISTS "Nur Admins dürfen Einladungscodes anlegen und bearbeiten"
+  ON public.invite_codes;
+CREATE POLICY "Nur Admins dürfen Einladungscodes anlegen und bearbeiten"
   ON public.invite_codes
+  FOR ALL
+  TO authenticated
   USING ((SELECT public.is_admin()))
   WITH CHECK ((SELECT public.is_admin()));
