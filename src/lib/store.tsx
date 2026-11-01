@@ -118,6 +118,82 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       });
   }, [authIdentity]);
 
+  useEffect(() => {
+    const client = supabase;
+    if (!client || !authIdentity) return;
+
+    const loadRemoteState = async () => {
+      const [{ data: remoteProfiles }, { data: remoteMatches }, { data: remoteTournaments }] =
+        await Promise.all([
+          client.from('profiles').select('*').order('created_at', { ascending: true }),
+          client.from('matches').select('*').order('created_at', { ascending: false }),
+          client.from('tournaments').select('*').order('created_at', { ascending: false }),
+        ]);
+
+      if (remoteProfiles) {
+        setPlayers(remoteProfiles.map((profile) => ({
+          id: profile.id,
+          name: profile.name,
+          avatar: profile.avatar || '⚽',
+          email: profile.email || '',
+          yearJoined: profile.year_joined,
+          level: profile.level,
+          xp: profile.xp,
+          xpNextLevel: profile.xp_next_level,
+          elo1v1: profile.elo_1v1,
+          elo2v2: profile.elo_2v2,
+          eloTotal: profile.elo_total,
+          leaguePoints: profile.league_points,
+          wins1v1: profile.wins_1v1,
+          losses1v1: profile.losses_1v1,
+          wins2v2: profile.wins_2v2,
+          losses2v2: profile.losses_2v2,
+          currentStreak: profile.current_streak,
+          bestRank: profile.best_rank,
+          role: profile.role as PlayerRole,
+          badges: profile.badges || [],
+          eloHistory: profile.elo_history || [],
+        })));
+      }
+      if (remoteMatches) {
+        setMatches(remoteMatches.map((match) => ({
+          id: match.id,
+          mode: match.mode as MatchMode,
+          date: match.created_at.slice(0, 10),
+          creatorId: match.creator_id,
+          teamA: match.team_a,
+          teamB: match.team_b,
+          scoreA: match.score_a,
+          scoreB: match.score_b,
+          status: match.status,
+          confirmedBy: match.confirmed_by || [],
+          resultApplied: match.result_applied ?? match.status === 'confirmed',
+          disputedBy: match.disputed_by || undefined,
+          disputeReason: match.dispute_reason || undefined,
+          eloChangeA: match.elo_change_a || 0,
+          eloChangeB: match.elo_change_b || 0,
+          tournamentId: match.tournament_id || undefined,
+        })));
+      }
+      if (remoteTournaments) {
+        setTournaments(remoteTournaments.map((tournament) => ({
+          id: tournament.id,
+          name: tournament.name,
+          description: tournament.description || '',
+          type: tournament.type,
+          mode: tournament.mode,
+          status: tournament.status,
+          participants: tournament.participants || [],
+          createdAt: tournament.created_at.slice(0, 10),
+          matches: tournament.matches || [],
+          winnerId: tournament.winner_id || undefined,
+        })));
+      }
+    };
+
+    void loadRemoteState();
+  }, [authIdentity]);
+
   // Save to localStorage on change
   useEffect(() => {
     if (!isHydrated) return;
