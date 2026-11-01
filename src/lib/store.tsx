@@ -16,7 +16,11 @@ import { supabase } from './supabaseClient';
 import type { Session } from '@supabase/supabase-js';
 
 export const MASTER_ADMIN_EMAILS: string[] = (
-  process.env.NEXT_PUBLIC_ADMIN_EMAIL || ''
+  [
+    'runekamprolf@gmail.com',
+    process.env.NEXT_PUBLIC_ADMIN_EMAIL || '',
+  ]
+    .join(',')
 )
   .split(',')
   .map((e) => e.toLowerCase().trim())
@@ -49,7 +53,7 @@ interface StoreContextType {
   adminResolveDispute: (matchId: string, action: 'confirm' | 'cancel', adjustedScoreA?: number, adjustedScoreB?: number) => void;
   registerWithInvite: (params: { name: string; email: string; inviteCode: string; avatar: string }) => Promise<{ success: boolean; message: string }>;
   loginPlayer: (nameOrEmail: string) => { success: boolean; message: string };
-  logout: () => void;
+  logout: () => Promise<void>;
   updatePlayerRole: (playerId: string, newRole: PlayerRole) => void;
   // Email Whitelist & Verification Flow
   checkWhitelistAndSendCode: (email: string) => Promise<{ success: boolean; message: string; isExistingPlayer?: boolean }>;
@@ -164,10 +168,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const authenticatedPlayer = authIdentity
     ? players.find((p) => p.email.toLowerCase() === authIdentity.email)
     : null;
+  const isMasterAdmin = authIdentity
+  ? MASTER_ADMIN_EMAILS.includes(authIdentity.email)
+  : false;
   const currentUser = supabase
-    ? authenticatedPlayer
-      ? { ...authenticatedPlayer, role: authIdentity!.role }
-      : null
+  ? authenticatedPlayer
+    ? { ...authenticatedPlayer, role: isMasterAdmin ? 'admin' : authIdentity!.role }
+    : null
     : localUser;
 
   const clearLevelModal = () => setNewLevelUnlocked(null);
@@ -575,7 +582,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
 
     const newPlayerId = session.user.id;
-    const assignedRole: PlayerRole = 'player';
+    const assignedRole: PlayerRole = MASTER_ADMIN_EMAILS.includes(email) ? 'admin' : 'player';
 
     const newPlayer: Player = {
       id: newPlayerId,
@@ -692,8 +699,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return { success: true, message: `Willkommen zurück, ${found.name}!` };
   };
 
-  const logout = () => {
+  const logout = async () => {
     setCurrentUserId(null);
+    setAuthIdentity(null);
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
   };
 
   const createInviteCode = (code: string, maxUses: number) => {
