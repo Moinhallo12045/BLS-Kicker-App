@@ -45,7 +45,7 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
   const dayOfWeek = weekStart.getDay() || 7;
   weekStart.setDate(weekStart.getDate() - dayOfWeek + 1);
   const weekStartKey = weekStart.toISOString().split('T')[0];
-  const weeklyCrawlers = matches
+  const weeklyCrawlerMatches = matches
     .filter((match) => match.status === 'confirmed' && match.date >= weekStartKey)
     .flatMap((match) => {
       if (match.scoreA === 0 && match.scoreB > 0) {
@@ -57,6 +57,20 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
       return [];
     })
     .sort((a, b) => b.winningScore - a.winningScore);
+  const weeklyCrawlers = Array.from(
+    weeklyCrawlerMatches.reduce((entries, { playerIds, winningScore }) => {
+      playerIds.forEach((playerId) => {
+        const entry = entries.get(playerId) || { losses: 0, worstScore: 0 };
+        entries.set(playerId, {
+          losses: entry.losses + 1,
+          worstScore: Math.max(entry.worstScore, winningScore),
+        });
+      });
+      return entries;
+    }, new Map<string, { losses: number; worstScore: number }>())
+  )
+    .map(([playerId, stats]) => ({ playerId, ...stats }))
+    .sort((a, b) => b.losses - a.losses || b.worstScore - a.worstScore);
 
   // XP Progress Percentage
   const xpPercent = Math.min(100, Math.round((currentUser.xp / currentUser.xpNextLevel) * 100));
@@ -228,18 +242,23 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
           <h3 className="font-display text-lg font-bold text-amber-300 flex items-center gap-2">
             🦀 Krabbler der Woche
           </h3>
-          <span className="text-[11px] text-amber-400/80 font-medium">0:{weeklyCrawlers.length ? weeklyCrawlers[0].winningScore : '–'}</span>
+          <span className="text-[11px] text-amber-400/80 font-medium">Rangliste</span>
         </div>
         {weeklyCrawlers.length === 0 ? (
           <p className="text-xs text-stone-400">Noch niemand musste diese Woche krabbeln.</p>
         ) : (
           <div className="space-y-1.5">
-            {weeklyCrawlers.slice(0, 3).map(({ match, playerIds, winningScore }) => (
-              <div key={match.id} className="flex items-center justify-between rounded-lg bg-amber-950/30 px-2.5 py-2">
-                <span className="text-xs font-bold text-white">
-                  {playerIds.map((id) => players.find((player) => player.id === id)?.name || 'Unbekannt').join(' & ')}
+            {weeklyCrawlers.map(({ playerId, losses, worstScore }, index) => (
+              <div key={playerId} className="flex items-center justify-between rounded-lg bg-amber-950/30 px-2.5 py-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-5 text-center text-xs font-black text-amber-400">#{index + 1}</span>
+                  <span className="text-xs font-bold text-white">
+                    {players.find((player) => player.id === playerId)?.name || 'Unbekannt'}
+                  </span>
+                </div>
+                <span className="text-right text-xs font-black text-amber-300">
+                  {losses}x · 0:{worstScore}
                 </span>
-                <span className="text-xs font-black text-amber-300">0:{winningScore}</span>
               </div>
             ))}
           </div>
