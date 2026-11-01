@@ -40,6 +40,9 @@ export interface Match {
   confirmedBy: string[]; // player IDs who confirmed
   disputedBy?: string;
   disputeReason?: string;
+  disputeProposedScoreA?: number;
+  disputeProposedScoreB?: number;
+  disputeProposedBy?: string;
   eloChangeA: number; // calculated once confirmed
   eloChangeB: number;
   tournamentId?: string;

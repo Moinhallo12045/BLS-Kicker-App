@@ -26,7 +26,10 @@ interface StoreContextType {
     scoreB: number;
   }) => { success: boolean; matchId: string; message: string };
   confirmMatch: (matchId: string) => void;
-  disputeMatch: (matchId: string, reason: string) => void;
+  disputeMatch: (matchId: string, reason: string, proposedScoreA?: number, proposedScoreB?: number) => void;
+  proposeDisputeResolution: (matchId: string, proposedScoreA: number, proposedScoreB: number, reason?: string) => void;
+  acceptDisputeResolution: (matchId: string) => void;
+  cancelMatchByMutualAgreement: (matchId: string) => void;
   adminResolveDispute: (matchId: string, action: 'confirm' | 'cancel', adjustedScoreA?: number, adjustedScoreB?: number) => void;
   registerWithInvite: (params: { name: string; email: string; inviteCode: string; avatar: string }) => { success: boolean; message: string };
   createInviteCode: (code: string, maxUses: number) => { success: boolean; message: string };
@@ -256,7 +259,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const disputeMatch = (matchId: string, reason: string) => {
+  const disputeMatch = (
+    matchId: string,
+    reason: string,
+    proposedScoreA?: number,
+    proposedScoreB?: number
+  ) => {
     if (!currentUser) return;
     setMatches((prev) =>
       prev.map((m) =>
@@ -266,10 +274,64 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               status: 'disputed',
               disputedBy: currentUser.id,
               disputeReason: reason,
+              disputeProposedScoreA: proposedScoreA,
+              disputeProposedScoreB: proposedScoreB,
+              disputeProposedBy: currentUser.id,
             }
           : m
       )
     );
+  };
+
+  const proposeDisputeResolution = (
+    matchId: string,
+    proposedScoreA: number,
+    proposedScoreB: number,
+    reason?: string
+  ) => {
+    if (!currentUser) return;
+    setMatches((prev) =>
+      prev.map((m) =>
+        m.id === matchId
+          ? {
+              ...m,
+              status: 'disputed',
+              disputeProposedScoreA: proposedScoreA,
+              disputeProposedScoreB: proposedScoreB,
+              disputeProposedBy: currentUser.id,
+              disputeReason: reason || m.disputeReason,
+            }
+          : m
+      )
+    );
+  };
+
+  const acceptDisputeResolution = (matchId: string) => {
+    const match = matches.find((m) => m.id === matchId);
+    if (!match) return;
+
+    if (
+      match.disputeProposedScoreA !== undefined &&
+      match.disputeProposedScoreB !== undefined
+    ) {
+      setMatches((prev) =>
+        prev.map((m) =>
+          m.id === matchId
+            ? {
+                ...m,
+                scoreA: m.disputeProposedScoreA!,
+                scoreB: m.disputeProposedScoreB!,
+              }
+            : m
+        )
+      );
+    }
+
+    confirmMatch(matchId);
+  };
+
+  const cancelMatchByMutualAgreement = (matchId: string) => {
+    setMatches((prev) => prev.filter((m) => m.id !== matchId));
   };
 
   const adminResolveDispute = (
@@ -279,7 +341,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     adjustedScoreB?: number
   ) => {
     if (action === 'cancel') {
-      setMatches((prev) => prev.filter((m) => m.id !== matchId));
+      cancelMatchByMutualAgreement(matchId);
       return;
     }
 
@@ -507,6 +569,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         submitMatch,
         confirmMatch,
         disputeMatch,
+        proposeDisputeResolution,
+        acceptDisputeResolution,
+        cancelMatchByMutualAgreement,
         adminResolveDispute,
         registerWithInvite,
         createInviteCode,

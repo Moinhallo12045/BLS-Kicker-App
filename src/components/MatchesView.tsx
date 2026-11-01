@@ -6,7 +6,13 @@ import { MatchStatus, MatchMode } from '@/types';
 import { Swords, CheckCircle2, Clock, AlertTriangle, Filter } from 'lucide-react';
 
 export function MatchesView({ onOpenMatchEntry }: { onOpenMatchEntry: () => void }) {
-  const { matches, players, currentUser } = useStore();
+  const { 
+    matches, 
+    players, 
+    currentUser, 
+    acceptDisputeResolution, 
+    cancelMatchByMutualAgreement 
+  } = useStore();
   const [filterMode, setFilterMode] = useState<'all' | MatchMode>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | MatchStatus>('all');
 
@@ -198,10 +204,45 @@ export function MatchesView({ onOpenMatchEntry }: { onOpenMatchEntry: () => void
                   </div>
                 </div>
 
-                {/* Dispute Reason note if present */}
-                {m.status === 'disputed' && m.disputeReason && (
-                  <div className="mt-3 p-2 rounded-lg bg-red-950/60 border border-red-800/40 text-[11px] text-red-200">
-                    <strong>Einwand:</strong> {m.disputeReason}
+                {/* Dispute Reason & Peer Resolution */}
+                {m.status === 'disputed' && (
+                  <div className="mt-3 p-3 rounded-xl bg-red-950/40 border border-red-700/50 space-y-2">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-red-300 font-bold">
+                        Strittig gemeldet: {m.disputeReason}
+                      </span>
+                      {m.disputeProposedScoreA !== undefined && m.disputeProposedScoreB !== undefined && (
+                        <span className="font-mono text-amber-300 font-bold bg-stone-900 px-2 py-0.5 rounded border border-amber-600/40">
+                          Gegenvorschlag: {m.disputeProposedScoreA} : {m.disputeProposedScoreB}
+                        </span>
+                      )}
+                    </div>
+
+                    {(m.teamA.includes(currentUser?.id || '') || m.teamB.includes(currentUser?.id || '')) && (
+                      <div className="flex items-center justify-end gap-2 pt-1 border-t border-red-900/40 text-xs">
+                        <button
+                          onClick={() => {
+                            if (confirm('Dieses Spiel im Einvernehmen streichen?')) {
+                              cancelMatchByMutualAgreement(m.id);
+                            }
+                          }}
+                          className="px-2.5 py-1 text-red-300 hover:text-white rounded bg-red-900/40"
+                        >
+                          Spiel streichen
+                        </button>
+
+                        {m.disputeProposedBy !== currentUser?.id &&
+                          m.disputeProposedScoreA !== undefined &&
+                          m.disputeProposedScoreB !== undefined && (
+                            <button
+                              onClick={() => acceptDisputeResolution(m.id)}
+                              className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded shadow"
+                            >
+                              Gegenvorschlag ({m.disputeProposedScoreA}:{m.disputeProposedScoreB}) annehmen
+                            </button>
+                          )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

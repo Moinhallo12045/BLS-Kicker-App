@@ -27,7 +27,11 @@ Eine moderne, hochwertige und mobiloptimierte Web-App (PWA) für geschlossene Ti
    - Spieler-Schnellauswahl mit Suchfeld
    - Torzähler bis 10 Tore inklusive Presets (10:7, 10:5, 10:8, 10:0, ...)
    - **Bestätigungspflicht**: Die Gegenseite erhält eine Anfrage unter *"Neu für dich"*. Erst nach Bestätigung erfolgt die offizielle serverseitige ELO-Berechnung.
-   - **"Stimmt nicht?" / Einspruch**: Bei Unstimmigkeiten wird das Spiel als *Strittig* markiert und geht zur Prüfung an den Administrator.
+   - **"Stimmt nicht?" / Einigung unter den Spielern**:
+     Bei Unstimmigkeiten wird das Spiel nicht über einen Admin eskaliert, sondern direkt zwischen den beteiligten Spielern geklärt:
+     1. Der beanstandende Spieler gibt das aus seiner Sicht korrekte Ergebnis (z.B. 8:10) und einen Kommentar ein.
+     2. Die Gegenseite sieht diesen Gegenvorschlag unter *"Neu für dich"* oder im Reiter *"Spiele"*.
+     3. Sie kann den Gegenvorschlag mit einem Klick annehmen (Ergebnis wird sofort offiziell gewertet & ELO aktualisiert) oder das Spiel im gegenseitigen Einvernehmen streichen.
 
 4. **Turniermodus**:
    - **K.-o.-Turnier**: Interaktiver visueller Turnierbaum mit Viertelfinale, Halbfinale, Finale und automatischem Weiterkommen der Sieger nach Ergebniseingabe.
@@ -41,16 +45,16 @@ Eine moderne, hochwertige und mobiloptimierte Web-App (PWA) für geschlossene Ti
 6. **Geschlossenes Registrierungs- & Rechtesystem**:
    - Kein anonymer Zugang: Registrierung ausschließlich mit Einladungscode (z.B. `KICKER2026`).
    - Rollensystem: **Administrator**, **Turnierleitung**, **Spieler**.
-   - Admin-Panel zum Verwalten von Einladungscodes, Auflösen strittiger Spiele und Rollenvergabe.
+   - Admin-Panel zum Verwalten von Einladungscodes und Rollenvergabe.
 
 ---
 
 ## 🛠️ Technologie-Stack (100% Kostenlos)
 
-- **Frontend**: Next.js (App Router), React, Tailwind CSS, Lucide Icons, Canvas-Confetti
+- **Frontend**: Next.js (Static Export), React, Tailwind CSS, Lucide Icons, Canvas-Confetti
+- **Hosting**: GitHub Pages (Kostenlos über GitHub Actions)
 - **Datenbank & Auth**: Supabase (Free Tier: 500 MB Datenbank, 50.000 monatlich aktive Nutzer)
-- **Hosting**: Vercel (Hobby Free Tier)
-- **Offline & Demomodus**: Integrierter LocalStorage-Fallout für sofortige lokale Nutzung ohne Einrichtungsaufwand
+- **Offline & Demomodus**: Integrierter LocalStorage-Fallback für sofortige Nutzung ohne Einrichtungsaufwand
 
 ---
 
@@ -66,18 +70,16 @@ http://localhost:3000
 
 ---
 
-## ☁️ Kostenlose Bereitstellung (Supabase & Vercel)
+## 🌐 Bereitstellung über GitHub Pages (100% Kostenlos)
 
-### 1. Kostenlose Supabase Datenbank
-1. Erstelle ein kostenloses Projekt auf [supabase.com](https://supabase.com).
-2. Öffne den **SQL Editor** im Supabase-Dashboard.
-3. Kopiere den Inhalt der Datei [`supabase/schema.sql`](file:///C:/Users/RUKAMPRO/BLS-Kicker-App/supabase/schema.sql) hinein und klicke auf **Run**.
-4. Kopiere unter *Project Settings > API* deine `URL` und den `anon public key`.
+Die Anwendung ist für den statischen Export auf GitHub Pages konfiguriert und enthält bereits den automatischen GitHub Actions Workflow [`.github/workflows/deploy.yml`](file:///.github/workflows/deploy.yml).
 
-### 2. Kostenloses Vercel Hosting
-1. Lade das Projekt auf dein GitHub-Konto hoch.
-2. Verbinde das Repository auf [vercel.com](https://vercel.com).
-3. Füge in Vercel die beiden Umgebungsvariablen hinzu:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-4. Klicke auf **Deploy**. Deine Tischkicker-Liga ist innerhalb von 1 Minute weltweit unter einer kostenlosen `.vercel.app`-Adresse erreichbar!
+### 1. GitHub Pages im Repository aktivieren
+1. Gehe auf GitHub in dein Repository `https://github.com/Moinhallo12045/BLS-Kicker-App`.
+2. Klicke auf **Settings** > **Pages** (in der linken Seitenleiste).
+3. Wähle unter **Build and deployment > Source**: **GitHub Actions** aus.
+
+### 2. Live schalten
+1. Sobald du deine Änderungen in den `main`-Branch pushst (`git push origin main`), startet der GitHub Action Workflow automatisch.
+2. Nach ca. 1 Minute ist die Liga unter folgendem Link live:
+   👉 **`https://moinhallo12045.github.io/BLS-Kicker-App/`**

@@ -59,10 +59,15 @@ export function AdminView() {
       {/* 1. Strittige Spiele (Dispute Arbitration) */}
       <div className="felt-card p-5 space-y-4 border-amber-600/50">
         <div className="flex items-center justify-between">
-          <h3 className="font-display text-lg font-bold text-white flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-amber-400" />
-            Strittige Spiele zur Entscheidung ({disputedMatches.length})
-          </h3>
+          <div>
+            <h3 className="font-display text-lg font-bold text-white flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-400" />
+              Strittige Spiele ({disputedMatches.length})
+            </h3>
+            <p className="text-[11px] text-emerald-300/80 mt-0.5">
+              Strittige Spiele werden primär direkt zwischen den beiden Spielern einvernehmlich gelöst.
+            </p>
+          </div>
         </div>
 
         {disputedMatches.length === 0 ? (
