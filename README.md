@@ -63,7 +63,17 @@ Eine moderne, hochwertige und mobiloptimierte Web-App (PWA) für geschlossene Ti
 - Supabase-Migrationen liegen unter [`supabase/migrations`](supabase/migrations).
 - Der GitHub-Actions-Workflow [`supabase-migrate.yml`](.github/workflows/supabase-migrate.yml) spielt neue Migrationen automatisch auf das verknüpfte Projekt ein.
 - Die produktive Autorisierung erfolgt serverseitig über Supabase-RLS, Trigger und Security-Definer-Funktionen; Client-Zustände oder LocalStorage vergeben keine Rechte.
+- Match-RPCs lehnen gesperrte Spieler, unbekannte Profile und doppelte Spieler-IDs in Teams serverseitig ab.
 - Für eine leere Übergabe-Datenbank nur Datensätze löschen, niemals Tabellen, RLS oder Funktionen. Owner-Mail und erlaubte Domain anschließend in der Whitelist hinterlegen und die Owner-Rolle einmalig serverseitig setzen.
+
+### Sicherheitsstatus
+
+- RLS ist für Profile, Matches, Turniere, Einladungscodes und Whitelist aktiviert.
+- Match-, Profil- und Sperrlogik wird serverseitig über geschützte RPCs und Trigger validiert.
+- Anonyme Ausführung der mutierenden RPCs ist entzogen; reine Trigger-Funktionen sind nicht direkt ausführbar.
+- Die Supabase-Advisor-Warnungen zu authentifizierten `SECURITY DEFINER`-RPCs sind für die von der Anwendung benötigten eingeloggten Aufrufe erwartbar.
+- Die Authentifizierung nutzt OTP/Magic-Link; es werden keine Benutzerpasswörter benötigt.
+- Nach jeder Migration sollte der Supabase Security/Performance Advisor erneut ausgeführt werden. Ein Live-Penetrationstest und die Prüfung der Dashboard-/Projektkonfiguration sind nicht durch den Quellcode ersetzt.
 
 ---
 
