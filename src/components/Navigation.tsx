@@ -64,21 +64,23 @@ export function Navigation({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Quick user switcher for demo testing */}
-            <div className="hidden sm:flex items-center bg-emerald-950/60 border border-emerald-800/50 rounded-full px-2.5 py-1 text-xs">
-              <span className="text-emerald-400/70 mr-1.5 text-[11px]">Angemeldet als:</span>
-              <select
-                value={currentUser?.id || ''}
-                onChange={(e) => switchUser(e.target.value)}
-                className="bg-transparent text-amber-300 font-semibold text-xs focus:outline-none cursor-pointer"
-              >
-                {players.map((p) => (
-                  <option key={p.id} value={p.id} className="bg-slate-900 text-white">
-                    {p.name} (Lvl {p.level})
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Quick user switcher when multiple players exist */}
+            {players.length > 1 && (
+              <div className="hidden sm:flex items-center bg-emerald-950/60 border border-emerald-800/50 rounded-full px-2.5 py-1 text-xs">
+                <span className="text-emerald-400/70 mr-1.5 text-[11px]">Angemeldet als:</span>
+                <select
+                  value={currentUser?.id || ''}
+                  onChange={(e) => switchUser(e.target.value)}
+                  className="bg-transparent text-amber-300 font-semibold text-xs focus:outline-none cursor-pointer"
+                >
+                  {players.map((p) => (
+                    <option key={p.id} value={p.id} className="bg-slate-900 text-white">
+                      {p.name} (Lvl {p.level})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Notification bell for pending matches */}
             <button

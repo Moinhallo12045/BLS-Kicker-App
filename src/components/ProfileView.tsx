@@ -14,13 +14,14 @@ import {
   ShieldCheck, 
   RefreshCw,
   Sparkles,
-  Check
+  Check,
+  LogOut
 } from 'lucide-react';
 
 const AVATAR_OPTIONS = ['🎯', '⚽', '👑', '🔥', '⚡', '🦁', '🎱', '⚔️', '⚓', '🦅', '🚀', '🎲'];
 
 export function ProfileView() {
-  const { currentUser, players, resetToDefaultData } = useStore();
+  const { currentUser, players, resetToDefaultData, logout } = useStore();
   const [selectedAvatar, setSelectedAvatar] = useState(currentUser?.avatar || '⚽');
   const [copiedLink, setCopiedLink] = useState(false);
 
@@ -76,13 +77,21 @@ export function ProfileView() {
               {tier.tier} • Jahrgang {currentUser.yearJoined} • ID: #{currentUser.id.slice(-6)}
             </p>
 
-            <div className="mt-3 flex items-center justify-center sm:justify-start gap-2">
+            <div className="mt-3 flex items-center justify-center sm:justify-start gap-2 flex-wrap">
               <button
                 onClick={handleCopyInvite}
                 className="px-3 py-1.5 rounded-lg bg-emerald-900/60 hover:bg-emerald-800 border border-emerald-700/50 text-xs font-semibold text-emerald-200 flex items-center gap-1.5 transition-colors"
               >
                 {copiedLink ? <Check className="w-3.5 h-3.5 text-neon-lime" /> : <Share2 className="w-3.5 h-3.5" />}
                 {copiedLink ? 'Link kopiert!' : 'Einladungslink teilen'}
+              </button>
+
+              <button
+                onClick={logout}
+                className="px-3 py-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 border border-red-700/50 text-xs font-semibold text-red-300 flex items-center gap-1.5 transition-colors"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                Abmelden
               </button>
             </div>
           </div>

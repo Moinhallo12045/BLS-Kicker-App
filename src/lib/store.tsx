@@ -32,6 +32,8 @@ interface StoreContextType {
   cancelMatchByMutualAgreement: (matchId: string) => void;
   adminResolveDispute: (matchId: string, action: 'confirm' | 'cancel', adjustedScoreA?: number, adjustedScoreB?: number) => void;
   registerWithInvite: (params: { name: string; email: string; inviteCode: string; avatar: string }) => { success: boolean; message: string };
+  loginPlayer: (nameOrEmail: string) => { success: boolean; message: string };
+  logout: () => void;
   createInviteCode: (code: string, maxUses: number) => { success: boolean; message: string };
   createTournament: (params: { name: string; description: string; type: 'ko' | 'groups' | 'round_robin'; mode: MatchMode; participants: string[] }) => void;
   advanceTournamentMatch: (tournamentId: string, matchId: string, scoreA: number, scoreB: number) => void;
@@ -40,7 +42,7 @@ interface StoreContextType {
 
 const StoreContext = createContext<StoreContextType | null>(null);
 
-const STORAGE_KEY = 'bls_kicker_app_state_v1';
+const STORAGE_KEY = 'bls_kicker_app_state_v2';
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [players, setPlayers] = useState<Player[]>(INITIAL_PLAYERS);
@@ -48,7 +50,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [tournaments, setTournaments] = useState<Tournament[]>(INITIAL_TOURNAMENTS);
   const [quests, setQuests] = useState<WeeklyQuest[]>(INITIAL_WEEKLY_QUESTS);
   const [inviteCodes, setInviteCodes] = useState<InviteCode[]>(INITIAL_INVITE_CODES);
-  const [currentUserId, setCurrentUserId] = useState<string>('p_birk');
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [newLevelUnlocked, setNewLevelUnlocked] = useState<{ player: Player; oldLevel: number; newLevel: number } | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
 
@@ -91,7 +93,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, [players, matches, tournaments, quests, inviteCodes, currentUserId, isHydrated]);
 
-  const currentUser = players.find((p) => p.id === currentUserId) || players[0] || null;
+  const currentUser = players.find((p) => p.id === currentUserId) || null;
 
   const clearLevelModal = () => setNewLevelUnlocked(null);
 
@@ -402,7 +404,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       losses2v2: 0,
       currentStreak: 0,
       bestRank: players.length + 1,
-      role: 'player',
+      role: players.length === 0 ? 'admin' : 'player',
       badges: [],
       eloHistory: [{ date: new Date().toISOString().split('T')[0], elo: 1000 }],
     };
@@ -419,7 +421,28 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       )
     );
 
-    return { success: true, message: 'Willkommen in der Kicker League!' };
+    return { 
+      success: true, 
+      message: players.length === 0 
+        ? 'Willkommen! Du bist als erster Spieler registriert und automatisch Administrator der Liga.' 
+        : 'Willkommen in der Kicker League!' 
+    };
+  };
+
+  const loginPlayer = (nameOrEmail: string) => {
+    const clean = nameOrEmail.trim().toLowerCase();
+    const found = players.find(
+      (p) => p.name.toLowerCase() === clean || p.email.toLowerCase() === clean
+    );
+    if (!found) {
+      return { success: false, message: 'Kein Spieler mit diesem Namen oder dieser E-Mail gefunden.' };
+    }
+    setCurrentUserId(found.id);
+    return { success: true, message: `Willkommen zurück, ${found.name}!` };
+  };
+
+  const logout = () => {
+    setCurrentUserId(null);
   };
 
   const createInviteCode = (code: string, maxUses: number) => {
@@ -544,12 +567,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resetToDefaultData = () => {
-    setPlayers(INITIAL_PLAYERS);
-    setMatches(INITIAL_MATCHES);
-    setTournaments(INITIAL_TOURNAMENTS);
+    setPlayers([]);
+    setMatches([]);
+    setTournaments([]);
     setQuests(INITIAL_WEEKLY_QUESTS);
     setInviteCodes(INITIAL_INVITE_CODES);
-    setCurrentUserId('p_birk');
+    setCurrentUserId(null);
     localStorage.removeItem(STORAGE_KEY);
   };
 
@@ -574,6 +597,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         cancelMatchByMutualAgreement,
         adminResolveDispute,
         registerWithInvite,
+        loginPlayer,
+        logout,
         createInviteCode,
         createTournament,
         advanceTournamentMatch,
