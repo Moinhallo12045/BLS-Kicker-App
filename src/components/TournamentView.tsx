@@ -74,7 +74,7 @@ export function TournamentView() {
           </p>
         </div>
 
-        {(currentUser?.role === 'admin' || currentUser?.role === 'tournament_director') && (
+        {(['owner', 'admin', 'organiser'].includes(currentUser?.role || '')) && (
           <button
             onClick={() => setShowCreateModal(true)}
             className="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs shadow flex items-center gap-1.5"

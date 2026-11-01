@@ -42,7 +42,7 @@ export function AdminView() {
     setTimeout(() => setNotification(null), 3000);
   };
 
-  if (currentUser?.role !== 'admin') {
+  if (!currentUser || !['owner', 'admin'].includes(currentUser.role)) {
     return (
       <div className="p-8 text-center felt-card space-y-3 border-red-800/40">
         <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto" />
@@ -365,17 +365,22 @@ export function AdminView() {
               <div className="flex items-center gap-2">
                 <select
                   value={p.role}
-                  disabled={p.id === currentUser?.id}
+                  disabled={currentUser.role !== 'owner' || p.role === 'owner'}
                   onChange={(e) => {
-                    updatePlayerRole(p.id, e.target.value as PlayerRole);
+                    void updatePlayerRole(p.id, e.target.value as PlayerRole);
                     setNotification(`Rolle von ${p.name} geändert zu: ${e.target.value}`);
                     setTimeout(() => setNotification(null), 3000);
                   }}
                   className="bg-emerald-950 border border-emerald-700/60 rounded-lg px-2 py-1 text-xs text-amber-300 font-bold focus:outline-none cursor-pointer"
-                  title={p.id === currentUser?.id ? 'Eigene Admin-Rolle kann nicht entzogen werden' : 'Rolle ändern'}
+                  title={currentUser.role !== 'owner'
+                    ? 'Nur der Owner darf Rollen ändern'
+                    : p.role === 'owner'
+                      ? 'Die Owner-Rolle ist geschützt'
+                      : 'Rolle ändern'}
                 >
+                  <option value="owner" className="bg-slate-900 text-red-300">Owner</option>
                   <option value="player" className="bg-slate-900 text-white">Spieler</option>
-                  <option value="tournament_director" className="bg-slate-900 text-blue-300">Turnierleiter</option>
+                  <option value="organiser" className="bg-slate-900 text-blue-300">Organiser</option>
                   <option value="admin" className="bg-slate-900 text-amber-400">Administrator</option>
                 </select>
 

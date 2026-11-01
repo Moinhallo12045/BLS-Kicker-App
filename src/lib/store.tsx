@@ -54,7 +54,7 @@ interface StoreContextType {
   registerWithInvite: (params: { name: string; email: string; inviteCode: string; avatar: string }) => Promise<{ success: boolean; message: string }>;
   loginPlayer: (nameOrEmail: string) => { success: boolean; message: string };
   logout: () => Promise<void>;
-  updatePlayerRole: (playerId: string, newRole: PlayerRole) => void;
+  updatePlayerRole: (playerId: string, newRole: PlayerRole) => Promise<void>;
   // Email Whitelist & Verification Flow
   checkWhitelistAndSendCode: (email: string) => Promise<{ success: boolean; message: string; isExistingPlayer?: boolean }>;
   verifyCode: (email: string, code: string) => Promise<{ success: boolean; message: string; isExistingPlayer?: boolean }>;
@@ -105,6 +105,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const isAdminIdentity = authIdentity && (
+      authIdentity.role === 'owner' ||
       authIdentity.role === 'admin' ||
       MASTER_ADMIN_EMAILS.includes(authIdentity.email)
     );
@@ -197,7 +198,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   : false;
   const currentUser = supabase
   ? authenticatedPlayer
-    ? { ...authenticatedPlayer, role: isMasterAdmin ? 'admin' : authIdentity!.role }
+    ? { ...authenticatedPlayer, role: isMasterAdmin ? 'owner' : authIdentity!.role }
     : null
     : localUser;
 
@@ -546,7 +547,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const isMasterAdmin = MASTER_ADMIN_EMAILS.some((adm) => adm.toLowerCase() === email);
       if (isMasterAdmin && existingPlayer.role !== 'admin') {
         setPlayers((prev) =>
-          prev.map((p) => (p.id === existingPlayer.id ? { ...p, role: 'admin' } : p))
+          prev.map((p) => (p.id === existingPlayer.id ? { ...p, role: 'owner' } : p))
         );
       }
       setCurrentUserId(existingPlayer.id);
@@ -606,7 +607,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
 
     const newPlayerId = session.user.id;
-    const assignedRole: PlayerRole = MASTER_ADMIN_EMAILS.includes(email) ? 'admin' : 'player';
+    const assignedRole: PlayerRole = MASTER_ADMIN_EMAILS.includes(email) ? 'owner' : 'player';
 
     const newPlayer: Player = {
       id: newPlayerId,
@@ -653,7 +654,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     };
   };
 
-  const updatePlayerRole = (playerId: string, newRole: PlayerRole) => {
+  const updatePlayerRole = async (playerId: string, newRole: PlayerRole) => {
+    if (!currentUser || currentUser.role !== 'owner') return;
+    if (supabase) {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: newRole })
+        .eq('id', playerId);
+      if (error) return;
+    }
     setPlayers((prev) =>
       prev.map((p) => (p.id === playerId ? { ...p, role: newRole } : p))
     );
@@ -672,7 +681,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     const { data: sessionData } = await supabase.auth.getSession();
     const authUserId = sessionData.session?.user.id;
-    if (!authUserId || currentUser?.role !== 'admin') {
+    if (!authUserId || !['owner', 'admin'].includes(currentUser?.role || '')) {
       return { success: false, message: 'Nur authentifizierte Administratoren dürfen die Whitelist ändern.' };
     }
 
