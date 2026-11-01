@@ -203,3 +203,58 @@ $$;
 
 REVOKE ALL ON FUNCTION public.submit_match_result(TEXT, UUID[], UUID[], INT, INT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.submit_match_result(TEXT, UUID[], UUID[], INT, INT) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.acknowledge_match(p_match_id UUID)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  actor_profile UUID;
+BEGIN
+  PERFORM set_config('app.server_operation', 'true', true);
+  SELECT id INTO actor_profile FROM public.profiles WHERE auth_user_id = auth.uid();
+  UPDATE public.matches
+  SET confirmed_by = ARRAY(
+    SELECT DISTINCT value
+    FROM unnest(array_append(confirmed_by, actor_profile)) AS value
+  ), updated_at = NOW()
+  WHERE id = p_match_id
+    AND actor_profile = ANY(team_a || team_b)
+    AND status IN ('pending', 'confirmed');
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.dispute_match(
+  p_match_id UUID,
+  p_reason TEXT,
+  p_score_a INT DEFAULT NULL,
+  p_score_b INT DEFAULT NULL
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  actor_profile UUID;
+BEGIN
+  PERFORM set_config('app.server_operation', 'true', true);
+  SELECT id INTO actor_profile FROM public.profiles WHERE auth_user_id = auth.uid();
+  IF actor_profile IS NULL OR length(trim(coalesce(p_reason, ''))) = 0 THEN
+    RAISE EXCEPTION 'A player and dispute reason are required';
+  END IF;
+  UPDATE public.matches
+  SET status = 'disputed',
+      disputed_by = actor_profile,
+      dispute_reason = trim(p_reason),
+      updated_at = NOW()
+  WHERE id = p_match_id
+    AND actor_profile = ANY(team_a || team_b)
+    AND status <> 'cancelled';
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.acknowledge_match(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.dispute_match(UUID, TEXT, INT, INT) TO authenticated;

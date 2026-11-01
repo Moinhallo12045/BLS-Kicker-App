@@ -531,6 +531,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const acknowledgeMatch = (matchId: string) => {
     if (!currentUser) return;
+    if (supabase) {
+      void supabase.rpc('acknowledge_match', { p_match_id: matchId });
+    }
     setMatches((prev) =>
       prev.map((match) =>
         match.id === matchId
@@ -550,6 +553,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     proposedScoreB?: number
   ) => {
     if (!currentUser) return;
+    if (supabase) {
+      void supabase.rpc('dispute_match', {
+        p_match_id: matchId,
+        p_reason: reason,
+        p_score_a: proposedScoreA ?? null,
+        p_score_b: proposedScoreB ?? null,
+      });
+    }
     setMatches((prev) =>
       prev.map((m) =>
         m.id === matchId
