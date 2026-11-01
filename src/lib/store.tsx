@@ -59,8 +59,8 @@ interface StoreContextType {
   checkWhitelistAndSendCode: (email: string) => Promise<{ success: boolean; message: string; isExistingPlayer?: boolean }>;
   verifyCode: (email: string, code: string) => Promise<{ success: boolean; message: string; isExistingPlayer?: boolean }>;
   completeProfileCreation: (params: { email: string; name: string; avatar: string }) => Promise<{ success: boolean; message: string }>;
-  addWhitelistEntry: (pattern: string) => { success: boolean; message: string };
-  removeWhitelistEntry: (id: string) => void;
+  addWhitelistEntry: (pattern: string) => Promise<{ success: boolean; message: string }>;
+  removeWhitelistEntry: (id: string) => Promise<{ success: boolean; message: string }>;
   createInviteCode: (code: string, maxUses: number) => { success: boolean; message: string };
   createTournament: (params: { name: string; description: string; type: 'ko' | 'groups' | 'round_robin'; mode: MatchMode; participants: string[] }) => void;
   advanceTournamentMatch: (tournamentId: string, matchId: string, scoreA: number, scoreB: number) => void;
@@ -102,6 +102,30 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
     setIsHydrated(true);
   }, []);
+
+  useEffect(() => {
+    const isAdminIdentity = authIdentity && (
+      authIdentity.role === 'admin' ||
+      MASTER_ADMIN_EMAILS.includes(authIdentity.email)
+    );
+    if (!supabase || !isAdminIdentity) return;
+
+    supabase
+      .from('whitelist')
+      .select('id, pattern, added_by, created_at')
+      .order('created_at', { ascending: true })
+      .then(({ data, error }) => {
+        if (error || !data) return;
+        setWhitelist(
+          data.map((entry) => ({
+            id: entry.id,
+            pattern: entry.pattern,
+            addedBy: entry.added_by,
+            createdAt: entry.created_at.slice(0, 10),
+          }))
+        );
+      });
+  }, [authIdentity?.role]);
 
   // Save to localStorage on change
   useEffect(() => {
@@ -635,28 +659,55 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     );
   };
 
-  const addWhitelistEntry = (rawPattern: string) => {
+  const addWhitelistEntry = async (rawPattern: string) => {
     const pattern = rawPattern.trim().toLowerCase();
     if (!pattern) return { success: false, message: 'Muster darf nicht leer sein' };
     if (whitelist.some((w) => w.pattern.toLowerCase() === pattern)) {
       return { success: false, message: 'Bereits auf der Whitelist vorhanden' };
     }
 
+    if (!supabase) {
+      return { success: false, message: 'Die sichere Datenbankverbindung ist nicht konfiguriert.' };
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const authUserId = sessionData.session?.user.id;
+    if (!authUserId || currentUser?.role !== 'admin') {
+      return { success: false, message: 'Nur authentifizierte Administratoren dürfen die Whitelist ändern.' };
+    }
+
+    const { data: inserted, error } = await supabase
+      .from('whitelist')
+      .insert({ pattern, added_by: authUserId })
+      .select('id, pattern, added_by, created_at')
+      .single();
+    if (error || !inserted) {
+      return { success: false, message: error?.message || 'Whitelist-Eintrag konnte nicht gespeichert werden.' };
+    }
+
     setWhitelist((prev) => [
       ...prev,
       {
-        id: 'wl_' + Date.now(),
-        pattern,
-        addedBy: currentUser?.id || 'admin',
-        createdAt: new Date().toISOString().split('T')[0],
+        id: inserted.id,
+        pattern: inserted.pattern,
+        addedBy: inserted.added_by,
+        createdAt: inserted.created_at.slice(0, 10),
       },
     ]);
 
     return { success: true, message: `"${pattern}" zur Whitelist hinzugefügt.` };
   };
 
-  const removeWhitelistEntry = (id: string) => {
+  const removeWhitelistEntry = async (id: string) => {
+    if (!supabase) {
+      return { success: false, message: 'Die sichere Datenbankverbindung ist nicht konfiguriert.' };
+    }
+    const { error } = await supabase.from('whitelist').delete().eq('id', id);
+    if (error) {
+      return { success: false, message: error.message };
+    }
     setWhitelist((prev) => prev.filter((w) => w.id !== id));
+    return { success: true, message: 'Whitelist-Eintrag entfernt.' };
   };
 
   // Backwards-compatible legacy helpers

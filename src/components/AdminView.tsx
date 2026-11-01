@@ -288,12 +288,12 @@ export function AdminView() {
 
         {/* Add Whitelist Pattern Form */}
         <form
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
             if (!newWhitelistPattern.trim()) return;
-            const res = addWhitelistEntry(newWhitelistPattern);
+            const res = await addWhitelistEntry(newWhitelistPattern);
             setNotification(res.message);
-            setNewWhitelistPattern('');
+            if (res.success) setNewWhitelistPattern('');
             setTimeout(() => setNotification(null), 3000);
           }}
           className="flex gap-2"
@@ -328,7 +328,11 @@ export function AdminView() {
                 </span>
               </div>
               <button
-                onClick={() => removeWhitelistEntry(w.id)}
+                onClick={async () => {
+                  const res = await removeWhitelistEntry(w.id);
+                  setNotification(res.message);
+                  setTimeout(() => setNotification(null), 3000);
+                }}
                 className="text-red-400 hover:text-red-300 p-1 rounded hover:bg-red-950/40"
                 title="Von Whitelist entfernen"
               >
