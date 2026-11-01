@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
+import { supabase } from '@/lib/supabaseClient';
 import { 
   Mail, 
   KeyRound, 
@@ -26,7 +27,9 @@ export function AuthLandingView() {
     checkWhitelistAndSendCode, 
     verifyCode, 
     completeProfileCreation,
-    whitelist 
+    whitelist,
+    players,
+    setCurrentUser
   } = useStore();
 
   const [step, setStep] = useState<AuthStep>('email');
@@ -41,6 +44,39 @@ export function AuthLandingView() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Auto-detect if user came via confirmation link / active session
+  useEffect(() => {
+    if (!supabase) return;
+
+    const handleAuthenticatedEmail = (authEmail: string) => {
+      const cleanEmail = authEmail.trim().toLowerCase();
+      const existingPlayer = players.find((p) => p.email.toLowerCase() === cleanEmail);
+      if (existingPlayer) {
+        setCurrentUser(existingPlayer);
+      } else {
+        setEmail(cleanEmail);
+        setSuccessMsg('E-Mail bestätigt! Bitte richte nun dein Spielerprofil ein.');
+        setStep('profile');
+      }
+    };
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.email) {
+        handleAuthenticatedEmail(session.user.email);
+      }
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user?.email) {
+        handleAuthenticatedEmail(session.user.email);
+      }
+    });
+
+    return () => {
+      authListener?.subscription.unsubscribe();
+    };
+  }, [players, setCurrentUser]);
 
   // STEP 1: Email eingeben & gegen Whitelist prüfen
   const handleEmailSubmit = async (e: React.FormEvent) => {
@@ -238,7 +274,7 @@ export function AuthLandingView() {
                 className="w-full bg-[#0a2014] border-2 border-amber-400/70 rounded-xl py-3 text-center text-xl sm:text-2xl font-mono font-black tracking-[0.25em] text-white placeholder-emerald-500/30 focus:outline-none focus:border-amber-400"
               />
               <p className="text-[10px] text-emerald-400/70 text-center mt-1.5">
-                Bitte prüfe auch deinen Spam-/Junk-Ordner nach der Bestätigungs-E-Mail.
+                Bitte prüfe auch deinen Spam-Ordner. (Du kannst den 6-stelligen Code eingeben <em>oder</em> direkt auf den Bestätigungslink in der E-Mail klicken.)
               </p>
             </div>
 
