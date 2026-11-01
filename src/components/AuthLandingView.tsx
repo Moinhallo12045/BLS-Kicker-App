@@ -32,7 +32,6 @@ export function AuthLandingView() {
   const [step, setStep] = useState<AuthStep>('email');
   const [email, setEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
-  const [sentCodePreview, setSentCodePreview] = useState<string | null>(null);
 
   // Profile setup fields
   const [name, setName] = useState('');
@@ -58,9 +57,6 @@ export function AuthLandingView() {
       return;
     }
 
-    if (res.code) {
-      setSentCodePreview(res.code);
-    }
     setSuccessMsg(res.message);
     setStep('verify');
   };
@@ -238,18 +234,6 @@ export function AuthLandingView() {
                 placeholder="123456"
                 className="w-full bg-[#0a2014] border-2 border-amber-400/70 rounded-xl py-3 text-center text-2xl font-mono font-black tracking-[0.4em] text-white placeholder-emerald-500/30 focus:outline-none focus:border-amber-400"
               />
-
-              {/* Instant Code Preview Box for direct testing */}
-              {sentCodePreview && (
-                <div className="mt-2.5 p-2 rounded-lg bg-emerald-950/60 border border-emerald-700/60 text-center">
-                  <span className="text-[10px] text-emerald-300 block">
-                    📨 Vorschau-Code für schnellen Login:
-                  </span>
-                  <span className="font-mono font-bold text-amber-300 text-sm tracking-wider">
-                    {sentCodePreview}
-                  </span>
-                </div>
-              )}
             </div>
 
             <button
