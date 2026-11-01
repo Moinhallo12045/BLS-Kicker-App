@@ -124,8 +124,8 @@ BEGIN
     RAISE EXCEPTION 'A linked player profile is required';
   END IF;
   IF p_mode NOT IN ('1v1', '2v2')
-     OR cardinality(p_team_a) <> CASE WHEN p_mode = '1v1' THEN 1 ELSE 2 END
-     OR cardinality(p_team_b) <> CASE WHEN p_mode = '1v1' THEN 1 ELSE 2 END
+     OR cardinality(p_team_a) <> (CASE WHEN p_mode = '1v1' THEN 1 ELSE 2 END)
+     OR cardinality(p_team_b) <> (CASE WHEN p_mode = '1v1' THEN 1 ELSE 2 END)
      OR p_team_a && p_team_b
      OR NOT (actor_profile = ANY(p_team_a) OR actor_profile = ANY(p_team_b))
      OR p_score_a < 0 OR p_score_b < 0
