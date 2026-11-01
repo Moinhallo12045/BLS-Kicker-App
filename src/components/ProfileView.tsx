@@ -57,7 +57,7 @@ export function ProfileView() {
               <h2 className="font-display text-2xl font-bold text-white">
                 {currentUser.name}
               </h2>
-              {currentUser.role === 'admin' && (
+              {['owner', 'admin'].includes(currentUser.role) && (
                 <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold">
                   Admin
                 </span>
@@ -65,7 +65,7 @@ export function ProfileView() {
             </div>
 
             <p className="text-xs text-emerald-300/80 mt-0.5">
-              {tier.tier} • Jahrgang {currentUser.yearJoined} • ID: #{currentUser.id.slice(-6)}
+              {tier.tier} • Uni-Jahrgang {currentUser.yearJoined} • ID: #{currentUser.id.slice(-6)}
             </p>
 
             <div className="mt-3 flex items-center justify-center sm:justify-start gap-2 flex-wrap">

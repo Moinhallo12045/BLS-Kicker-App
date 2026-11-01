@@ -15,17 +15,6 @@ import { getXpForNextLevel, MATCH_XP } from './levels';
 import { supabase } from './supabaseClient';
 import type { Session } from '@supabase/supabase-js';
 
-export const MASTER_ADMIN_EMAILS: string[] = (
-  [
-    'runekamprolf@gmail.com',
-    process.env.NEXT_PUBLIC_ADMIN_EMAIL || '',
-  ]
-    .join(',')
-)
-  .split(',')
-  .map((e) => e.toLowerCase().trim())
-  .filter(Boolean);
-
 interface StoreContextType {
   currentUser: Player | null;
   players: Player[];
@@ -54,11 +43,11 @@ interface StoreContextType {
   registerWithInvite: (params: { name: string; email: string; inviteCode: string; avatar: string }) => Promise<{ success: boolean; message: string }>;
   loginPlayer: (nameOrEmail: string) => { success: boolean; message: string };
   logout: () => Promise<void>;
-  updatePlayerRole: (playerId: string, newRole: PlayerRole) => void;
+  updatePlayerRole: (playerId: string, newRole: PlayerRole) => Promise<void>;
   // Email Whitelist & Verification Flow
   checkWhitelistAndSendCode: (email: string) => Promise<{ success: boolean; message: string; isExistingPlayer?: boolean }>;
   verifyCode: (email: string, code: string) => Promise<{ success: boolean; message: string; isExistingPlayer?: boolean }>;
-  completeProfileCreation: (params: { email: string; name: string; avatar: string }) => Promise<{ success: boolean; message: string }>;
+  completeProfileCreation: (params: { email: string; name: string; avatar: string; yearJoined: number }) => Promise<{ success: boolean; message: string }>;
   addWhitelistEntry: (pattern: string) => Promise<{ success: boolean; message: string }>;
   removeWhitelistEntry: (id: string) => Promise<{ success: boolean; message: string }>;
   createInviteCode: (code: string, maxUses: number) => { success: boolean; message: string };
@@ -105,8 +94,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const isAdminIdentity = authIdentity && (
-      authIdentity.role === 'admin' ||
-      MASTER_ADMIN_EMAILS.includes(authIdentity.email)
+      authIdentity.role === 'owner' ||
+      authIdentity.role === 'admin'
     );
     if (!supabase || !isAdminIdentity) return;
 
@@ -192,12 +181,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const authenticatedPlayer = authIdentity
     ? players.find((p) => p.email.toLowerCase() === authIdentity.email)
     : null;
-  const isMasterAdmin = authIdentity
-  ? MASTER_ADMIN_EMAILS.includes(authIdentity.email)
-  : false;
   const currentUser = supabase
   ? authenticatedPlayer
-    ? { ...authenticatedPlayer, role: isMasterAdmin ? 'admin' : authIdentity!.role }
+    ? { ...authenticatedPlayer, role: authIdentity!.role }
     : null
     : localUser;
 
@@ -543,12 +529,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const existingPlayer = players.find((p) => p.email.toLowerCase() === email);
     if (existingPlayer) {
       // Auto-upgrade to admin if master admin email
-      const isMasterAdmin = MASTER_ADMIN_EMAILS.some((adm) => adm.toLowerCase() === email);
-      if (isMasterAdmin && existingPlayer.role !== 'admin') {
-        setPlayers((prev) =>
-          prev.map((p) => (p.id === existingPlayer.id ? { ...p, role: 'admin' } : p))
-        );
-      }
       setCurrentUserId(existingPlayer.id);
       return {
         success: true,
@@ -568,16 +548,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     email: rawEmail,
     name,
     avatar,
+    yearJoined,
   }: {
     email: string;
     name: string;
     avatar: string;
+    yearJoined: number;
   }) => {
     const email = rawEmail.trim().toLowerCase();
     const cleanName = name.trim();
 
     if (!cleanName) {
       return { success: false, message: 'Bitte einen Spielernamen eingeben.' };
+    }
+    const currentYear = new Date().getFullYear();
+    if (!Number.isInteger(yearJoined) || yearJoined < 2000 || yearJoined > currentYear) {
+      return { success: false, message: 'Bitte einen gültigen Uni-Jahrgang auswählen.' };
     }
 
     if (!supabase) {
@@ -606,14 +592,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
 
     const newPlayerId = session.user.id;
-    const assignedRole: PlayerRole = MASTER_ADMIN_EMAILS.includes(email) ? 'admin' : 'player';
+    const assignedRole: PlayerRole = 'player';
 
     const newPlayer: Player = {
       id: newPlayerId,
       name: cleanName,
       avatar: avatar || '⚽',
       email,
-      yearJoined: new Date().getFullYear(),
+      yearJoined,
       level: 1,
       xp: 0,
       xpNextLevel: 100,
@@ -638,6 +624,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       name: cleanName,
       avatar: avatar || '⚽',
       email,
+      year_joined: yearJoined,
       role: assignedRole,
     });
     if (profileError) {
@@ -653,7 +640,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     };
   };
 
-  const updatePlayerRole = (playerId: string, newRole: PlayerRole) => {
+  const updatePlayerRole = async (playerId: string, newRole: PlayerRole) => {
+    if (!currentUser || currentUser.role !== 'owner') return;
+    if (supabase) {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: newRole })
+        .eq('id', playerId);
+      if (error) return;
+    }
     setPlayers((prev) =>
       prev.map((p) => (p.id === playerId ? { ...p, role: newRole } : p))
     );
@@ -672,7 +667,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     const { data: sessionData } = await supabase.auth.getSession();
     const authUserId = sessionData.session?.user.id;
-    if (!authUserId || currentUser?.role !== 'admin') {
+    if (!authUserId || !['owner', 'admin'].includes(currentUser?.role || '')) {
       return { success: false, message: 'Nur authentifizierte Administratoren dürfen die Whitelist ändern.' };
     }
 
@@ -735,7 +730,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (inviteError || !inviteAccepted) {
       return { success: false, message: 'Der Einladungscode ist ungültig oder bereits ausgeschöpft.' };
     }
-    return completeProfileCreation({ email, name, avatar });
+    return completeProfileCreation({ email, name, avatar, yearJoined: new Date().getFullYear() });
   };
 
   const loginPlayer = (nameOrEmail: string) => {

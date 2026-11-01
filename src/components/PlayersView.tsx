@@ -101,7 +101,7 @@ export function PlayersView() {
                     )}
                   </div>
                   <div className="text-[11px] text-emerald-400/70">
-                    {tier.tier} • Jg. {p.yearJoined}
+                    {tier.tier} • Uni-Jg. {p.yearJoined}
                   </div>
                 </div>
               </div>

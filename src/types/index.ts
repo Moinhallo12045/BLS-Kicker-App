@@ -1,4 +1,4 @@
-export type PlayerRole = 'admin' | 'tournament_director' | 'player';
+export type PlayerRole = 'owner' | 'admin' | 'organiser' | 'player';
 
 export interface Player {
   id: string;
@@ -107,4 +107,3 @@ export interface WhitelistEntry {
   addedBy: string;
   createdAt: string;
 }
-

@@ -10,7 +10,12 @@ ALTER TABLE public.whitelist ENABLE ROW LEVEL SECURITY;
 CREATE OR REPLACE FUNCTION public.is_master_admin()
 RETURNS BOOLEAN AS $$
 BEGIN
-  RETURN lower(coalesce(auth.jwt() ->> 'email', '')) = 'runekamprolf@gmail.com';
+  RETURN EXISTS (
+    SELECT 1
+    FROM public.profiles
+    WHERE auth_user_id = auth.uid()
+      AND role = 'owner'
+  );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 

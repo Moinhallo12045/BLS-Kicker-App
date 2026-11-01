@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     losses_2v2 INT DEFAULT 0,
     current_streak INT DEFAULT 0,
     best_rank INT DEFAULT 999,
-    role TEXT CHECK (role IN ('admin', 'tournament_director', 'player')) DEFAULT 'player',
+    role TEXT CHECK (role IN ('owner', 'admin', 'organiser', 'player')) DEFAULT 'player',
     badges JSONB DEFAULT '[]'::jsonb,
     elo_history JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -92,8 +92,18 @@ ALTER TABLE public.whitelist ENABLE ROW LEVEL SECURITY;
 CREATE OR REPLACE FUNCTION public.is_master_admin()
 RETURNS BOOLEAN AS $$
 BEGIN
-  RETURN lower(coalesce(auth.jwt() ->> 'email', '')) IN (
-    'runekamprolf@gmail.com'
+  RETURN public.is_owner();
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+CREATE OR REPLACE FUNCTION public.is_owner()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1
+    FROM public.profiles
+    WHERE auth_user_id = auth.uid()
+      AND role = 'owner'
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
@@ -103,8 +113,8 @@ RETURNS BOOLEAN AS $$
 BEGIN
   RETURN EXISTS (
     SELECT 1 FROM public.profiles
-    WHERE auth_user_id = auth.uid() AND role = 'admin'
-  ) OR public.is_master_admin();
+    WHERE auth_user_id = auth.uid() AND role IN ('owner', 'admin')
+  ) OR public.is_owner();
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -113,8 +123,12 @@ RETURNS BOOLEAN AS $$
 DECLARE
   normalized_email TEXT := lower(trim(candidate_email));
 BEGIN
-  RETURN normalized_email IN ('runekamprolf@gmail.com')
-    OR EXISTS (
+  RETURN EXISTS (
+    SELECT 1
+    FROM public.profiles
+    WHERE lower(email) = normalized_email
+      AND role = 'owner'
+  ) OR EXISTS (
     SELECT 1
     FROM public.whitelist
     WHERE lower(pattern) = normalized_email
@@ -188,13 +202,13 @@ FOR ALL TO authenticated
 USING (
   public.is_admin() OR EXISTS (
     SELECT 1 FROM public.profiles p
-    WHERE p.auth_user_id = auth.uid() AND p.role IN ('admin', 'tournament_director')
+    WHERE p.auth_user_id = auth.uid() AND p.role IN ('owner', 'admin', 'organiser')
   )
 )
 WITH CHECK (
   public.is_admin() OR EXISTS (
     SELECT 1 FROM public.profiles p
-    WHERE p.auth_user_id = auth.uid() AND p.role IN ('admin', 'tournament_director')
+    WHERE p.auth_user_id = auth.uid() AND p.role IN ('owner', 'admin', 'organiser')
   )
 );
 
@@ -256,9 +270,11 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  IF NOT public.is_admin() THEN
+  IF NOT public.is_owner() THEN
+    IF NEW.role IS DISTINCT FROM OLD.role THEN
+      RAISE EXCEPTION 'Only the owner may change roles';
+    END IF;
     IF NEW.auth_user_id IS DISTINCT FROM OLD.auth_user_id
-       OR NEW.role IS DISTINCT FROM OLD.role
        OR NEW.email IS DISTINCT FROM OLD.email
        OR NEW.xp IS DISTINCT FROM OLD.xp
        OR NEW.xp_next_level IS DISTINCT FROM OLD.xp_next_level

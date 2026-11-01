@@ -158,7 +158,7 @@ export function RankingView() {
                     </div>
 
                     <div className="text-[11px] text-emerald-400/60 font-medium">
-                      Jg. {player.yearJoined} • {player.leaguePoints} Ligapunkte
+                      Uni-Jg. {player.yearJoined} • {player.leaguePoints} Ligapunkte
                     </div>
                   </div>
                 </div>
@@ -210,7 +210,7 @@ export function RankingView() {
                         </span>
                       </div>
                       <div className="text-[10px] text-emerald-400/60">
-                        Jg. {np.yearJoined}
+                        Uni-Jg. {np.yearJoined}
                       </div>
                     </div>
                   </div>

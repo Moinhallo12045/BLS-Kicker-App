@@ -172,7 +172,7 @@ export function Navigation({
             Mein Profil
           </button>
 
-          {currentUser?.role === 'admin' && (
+          {currentUser && ['owner', 'admin'].includes(currentUser.role) && (
             <button
               onClick={() => onSelectTab('admin')}
               className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${

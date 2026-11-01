@@ -52,7 +52,7 @@ export default function Home() {
         {currentTab === 'tournaments' && <TournamentView />}
         {currentTab === 'players' && <PlayersView />}
         {currentTab === 'profile' && <ProfileView />}
-        {currentTab === 'admin' && currentUser?.role === 'admin' && <AdminView />}
+        {currentTab === 'admin' && currentUser && ['owner', 'admin'].includes(currentUser.role) && <AdminView />}
       </div>
 
       {/* Modals & Dialogs */}
