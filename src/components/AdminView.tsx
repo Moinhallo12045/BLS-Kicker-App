@@ -42,7 +42,7 @@ export function AdminView() {
     setTimeout(() => setNotification(null), 3000);
   };
 
-  if (!currentUser || !['owner', 'admin'].includes(currentUser.role)) {
+  if (!currentUser || ['owner', 'co_owner', 'admin'].includes(currentUser.role) === false) {
     return (
       <div className="p-8 text-center felt-card space-y-3 border-red-800/40">
         <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto" />
@@ -365,20 +365,30 @@ export function AdminView() {
               <div className="flex items-center gap-2">
                 <select
                   value={p.role}
-                  disabled={currentUser.role !== 'owner' || p.role === 'owner'}
+                  disabled={!['owner', 'co_owner'].includes(currentUser.role) || p.id === currentUser.id || p.role === 'owner'}
                   onChange={(e) => {
                     void updatePlayerRole(p.id, e.target.value as PlayerRole);
                     setNotification(`Rolle von ${p.name} geändert zu: ${e.target.value}`);
                     setTimeout(() => setNotification(null), 3000);
                   }}
                   className="bg-emerald-950 border border-emerald-700/60 rounded-lg px-2 py-1 text-xs text-amber-300 font-bold focus:outline-none cursor-pointer"
-                  title={currentUser.role !== 'owner'
-                    ? 'Nur der Owner darf Rollen ändern'
+                  title={!['owner', 'co_owner'].includes(currentUser.role)
+                    ? 'Keine Berechtigung, Rollen zu ändern'
+                    : p.id === currentUser.id
+                      ? 'Die eigene Rolle kann nicht geändert werden'
                     : p.role === 'owner'
                       ? 'Die Owner-Rolle ist geschützt'
                       : 'Rolle ändern'}
                 >
-                  <option value="owner" className="bg-slate-900 text-red-300">Owner</option>
+                  {currentUser.role === 'owner' && (
+                    <option value="owner" className="bg-slate-900 text-red-300">Owner</option>
+                  )}
+                  {currentUser.role === 'owner' && (
+                    <option value="co_owner" className="bg-slate-900 text-purple-300">Co-Owner</option>
+                  )}
+                  {currentUser.role === 'co_owner' && (
+                    <option value="co_owner" className="bg-slate-900 text-purple-300">Co-Owner</option>
+                  )}
                   <option value="player" className="bg-slate-900 text-white">Spieler</option>
                   <option value="organiser" className="bg-slate-900 text-blue-300">Organiser</option>
                   <option value="admin" className="bg-slate-900 text-amber-400">Administrator</option>

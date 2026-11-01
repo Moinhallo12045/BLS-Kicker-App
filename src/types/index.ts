@@ -1,4 +1,4 @@
-export type PlayerRole = 'owner' | 'admin' | 'organiser' | 'player';
+export type PlayerRole = 'owner' | 'co_owner' | 'admin' | 'organiser' | 'player';
 
 export interface Player {
   id: string;
@@ -38,6 +38,7 @@ export interface Match {
   scoreB: number;
   status: MatchStatus;
   confirmedBy: string[]; // player IDs who confirmed
+  resultApplied?: boolean;
   disputedBy?: string;
   disputeReason?: string;
   disputeProposedScoreA?: number;

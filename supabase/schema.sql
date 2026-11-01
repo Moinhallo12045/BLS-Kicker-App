@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     losses_2v2 INT DEFAULT 0,
     current_streak INT DEFAULT 0,
     best_rank INT DEFAULT 999,
-    role TEXT CHECK (role IN ('owner', 'admin', 'organiser', 'player')) DEFAULT 'player',
+    role TEXT CHECK (role IN ('owner', 'co_owner', 'admin', 'organiser', 'player')) DEFAULT 'player',
     badges JSONB DEFAULT '[]'::jsonb,
     elo_history JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -113,7 +113,7 @@ RETURNS BOOLEAN AS $$
 BEGIN
   RETURN EXISTS (
     SELECT 1 FROM public.profiles
-    WHERE auth_user_id = auth.uid() AND role IN ('owner', 'admin')
+    WHERE auth_user_id = auth.uid() AND role IN ('owner', 'co_owner', 'admin')
   ) OR public.is_owner();
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -125,11 +125,6 @@ DECLARE
 BEGIN
   RETURN EXISTS (
     SELECT 1
-    FROM public.profiles
-    WHERE lower(email) = normalized_email
-      AND role = 'owner'
-  ) OR EXISTS (
-    SELECT 1
     FROM public.whitelist
     WHERE lower(pattern) = normalized_email
        OR (left(pattern, 1) = '@' AND normalized_email LIKE '%' || lower(pattern))
@@ -137,7 +132,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
-GRANT EXECUTE ON FUNCTION public.is_email_whitelisted(TEXT) TO anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.is_email_whitelisted(TEXT) FROM anon;
+GRANT EXECUTE ON FUNCTION public.is_email_whitelisted(TEXT) TO authenticated;
 
 -- 5.2 Whitelist Policies
 CREATE POLICY "Nur Admins dürfen Whitelist bearbeiten" ON public.whitelist 
@@ -202,13 +198,13 @@ FOR ALL TO authenticated
 USING (
   public.is_admin() OR EXISTS (
     SELECT 1 FROM public.profiles p
-    WHERE p.auth_user_id = auth.uid() AND p.role IN ('owner', 'admin', 'organiser')
+    WHERE p.auth_user_id = auth.uid() AND p.role IN ('owner', 'co_owner', 'admin', 'organiser')
   )
 )
 WITH CHECK (
   public.is_admin() OR EXISTS (
     SELECT 1 FROM public.profiles p
-    WHERE p.auth_user_id = auth.uid() AND p.role IN ('owner', 'admin', 'organiser')
+    WHERE p.auth_user_id = auth.uid() AND p.role IN ('owner', 'co_owner', 'admin', 'organiser')
   )
 );
 
@@ -271,8 +267,18 @@ BEGIN
   END IF;
 
   IF NOT public.is_owner() THEN
-    IF NEW.role IS DISTINCT FROM OLD.role THEN
-      RAISE EXCEPTION 'Only the owner may change roles';
+    IF EXISTS (
+      SELECT 1
+      FROM public.profiles
+      WHERE auth_user_id = auth.uid()
+        AND role = 'co_owner'
+    ) THEN
+      IF (OLD.auth_user_id = auth.uid() OR OLD.role = 'owner' OR NEW.role = 'owner')
+         AND NEW.role IS DISTINCT FROM OLD.role THEN
+        RAISE EXCEPTION 'Co-owner cannot change their own role, the owner role, or assign the owner role';
+      END IF;
+    ELSIF NEW.role IS DISTINCT FROM OLD.role THEN
+      RAISE EXCEPTION 'Only the owner or an eligible co-owner may change roles';
     END IF;
     IF NEW.auth_user_id IS DISTINCT FROM OLD.auth_user_id
        OR NEW.email IS DISTINCT FROM OLD.email

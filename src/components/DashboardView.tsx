@@ -40,6 +40,38 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
   // Recent 3 matches
   const recentMatches = matches.slice(0, 3);
 
+  const weekStart = new Date();
+  weekStart.setHours(0, 0, 0, 0);
+  const dayOfWeek = weekStart.getDay() || 7;
+  weekStart.setDate(weekStart.getDate() - dayOfWeek + 1);
+  const weekStartKey = weekStart.toISOString().split('T')[0];
+  const weeklyCrawlerMatches = matches
+    .filter((match) => !['disputed', 'cancelled'].includes(match.status) && match.date >= weekStartKey)
+    .flatMap((match) => {
+      if (match.scoreA === 0 && match.scoreB > 0) {
+        return [{ match, playerIds: match.teamA, winningScore: match.scoreB }];
+      }
+      if (match.scoreB === 0 && match.scoreA > 0) {
+        return [{ match, playerIds: match.teamB, winningScore: match.scoreA }];
+      }
+      return [];
+    })
+    .sort((a, b) => b.winningScore - a.winningScore);
+  const weeklyCrawlers = Array.from(
+    weeklyCrawlerMatches.reduce((entries, { playerIds, winningScore }) => {
+      playerIds.forEach((playerId) => {
+        const entry = entries.get(playerId) || { losses: 0, worstScore: 0 };
+        entries.set(playerId, {
+          losses: entry.losses + 1,
+          worstScore: Math.max(entry.worstScore, winningScore),
+        });
+      });
+      return entries;
+    }, new Map<string, { losses: number; worstScore: number }>())
+  )
+    .map(([playerId, stats]) => ({ playerId, ...stats }))
+    .sort((a, b) => b.losses - a.losses || b.worstScore - a.worstScore);
+
   // XP Progress Percentage
   const xpPercent = Math.min(100, Math.round((currentUser.xp / currentUser.xpNextLevel) * 100));
 
@@ -203,6 +235,34 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="felt-card p-4 border border-amber-700/40 bg-amber-950/20">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-display text-lg font-bold text-amber-300 flex items-center gap-2">
+            🦀 Krabbler der Woche
+          </h3>
+          <span className="text-[11px] text-amber-400/80 font-medium">Rangliste</span>
+        </div>
+        {weeklyCrawlers.length === 0 ? (
+          <p className="text-xs text-stone-400">Noch niemand musste diese Woche krabbeln.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {weeklyCrawlers.map(({ playerId, losses, worstScore }, index) => (
+              <div key={playerId} className="flex items-center justify-between rounded-lg bg-amber-950/30 px-2.5 py-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-5 text-center text-xs font-black text-amber-400">#{index + 1}</span>
+                  <span className="text-xs font-bold text-white">
+                    {players.find((player) => player.id === playerId)?.name || 'Unbekannt'}
+                  </span>
+                </div>
+                <span className="text-right text-xs font-black text-amber-300">
+                  {losses}x · 0:{worstScore}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Abzeichen Showcase (Directly matches Screenshot 2) */}
