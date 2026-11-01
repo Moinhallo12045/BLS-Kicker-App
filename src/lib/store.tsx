@@ -271,6 +271,39 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     : null
     : localUser;
 
+  const refreshRemoteProfiles = async () => {
+    if (!supabase) return;
+    const { data: remoteProfiles, error } = await supabase.from('profiles').select('*');
+    if (error || !remoteProfiles) {
+      if (error) console.error('Failed to refresh profiles:', error);
+      return;
+    }
+    setPlayers(remoteProfiles.map((profile) => ({
+      id: profile.id,
+      name: profile.name,
+      avatar: profile.avatar || '⚽',
+      email: profile.email || '',
+      yearJoined: profile.year_joined,
+      level: profile.level,
+      xp: profile.xp,
+      xpNextLevel: profile.xp_next_level,
+      elo1v1: profile.elo_1v1,
+      elo2v2: profile.elo_2v2,
+      eloTotal: profile.elo_total,
+      leaguePoints: profile.league_points,
+      wins1v1: profile.wins_1v1,
+      losses1v1: profile.losses_1v1,
+      wins2v2: profile.wins_2v2,
+      losses2v2: profile.losses_2v2,
+      currentStreak: profile.current_streak,
+      bestRank: profile.best_rank,
+      role: profile.role as PlayerRole,
+      isSuspended: profile.is_suspended ?? false,
+      badges: profile.badges || [],
+      eloHistory: profile.elo_history || [],
+    })));
+  };
+
   const clearLevelModal = () => setNewLevelUnlocked(null);
 
   const switchUser = (playerId: string) => {
@@ -361,33 +394,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         eloChangeB: remoteMatch.elo_change_b,
       };
       setMatches((prev) => [mappedMatch, ...prev]);
-      const { data: remoteProfiles } = await supabase.from('profiles').select('*');
-      if (remoteProfiles) {
-        setPlayers(remoteProfiles.map((profile) => ({
-          id: profile.id,
-          name: profile.name,
-          avatar: profile.avatar || '⚽',
-          email: profile.email || '',
-          yearJoined: profile.year_joined,
-          level: profile.level,
-          xp: profile.xp,
-          xpNextLevel: profile.xp_next_level,
-          elo1v1: profile.elo_1v1,
-          elo2v2: profile.elo_2v2,
-          eloTotal: profile.elo_total,
-          leaguePoints: profile.league_points,
-          wins1v1: profile.wins_1v1,
-          losses1v1: profile.losses_1v1,
-          wins2v2: profile.wins_2v2,
-          losses2v2: profile.losses_2v2,
-          currentStreak: profile.current_streak,
-          bestRank: profile.best_rank,
-          role: profile.role as PlayerRole,
-          isSuspended: profile.is_suspended ?? false,
-          badges: profile.badges || [],
-          eloHistory: profile.elo_history || [],
-        })));
-      }
+      await refreshRemoteProfiles();
       return {
         success: true,
         matchId: mappedMatch.id,
@@ -423,6 +430,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   };
 
   const confirmMatch = (matchId: string, matchOverride?: Match) => {
+    // In the connected mode, scoring is performed atomically by
+    // submit_match_result in Supabase. Never award local points for a
+    // match that may not exist in the database.
+    if (supabase) return;
+
     setMatches((prevMatches) => {
       const match = matchOverride || prevMatches.find((m) => m.id === matchId);
       if (!match || match.status === 'confirmed') return prevMatches;
@@ -693,21 +705,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const cancelMatchByMutualAgreement = async (matchId: string) => {
     if (supabase) {
-      const { data, error } = await supabase
-        .from('matches')
-        .update({ status: 'cancelled' })
-        .eq('id', matchId)
-        .in('status', ['disputed', 'pending', 'confirmed'])
-        .select('id')
-        .single();
-      if (error || !data) {
+      const { error } = await supabase.rpc('cancel_match', { p_match_id: matchId });
+      if (error) {
         console.error('Match cancellation failed:', error);
         return;
       }
+      await refreshRemoteProfiles();
     }
     setMatches((prev) =>
       supabase
-        ? prev.map((match) => match.id === matchId ? { ...match, status: 'cancelled' } : match)
+        ? prev.map((match) => match.id === matchId
+          ? { ...match, status: 'cancelled', resultApplied: false, eloChangeA: 0, eloChangeB: 0 }
+          : match)
         : prev.filter((match) => match.id !== matchId)
     );
   };
