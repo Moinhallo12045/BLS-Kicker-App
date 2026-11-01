@@ -5,10 +5,10 @@ import { StoreProvider } from '@/lib/store';
 export const metadata: Metadata = {
   title: 'Kicker League – Digitale Tischkicker-Liga',
   description: 'Moderne, hochwertige Web-App für geschlossene Tischkicker-Ligen mit ELO-System, Turniermodus, Leveling und Statistiken.',
-  manifest: '/manifest.json',
+  manifest: '/BLS-Kicker-App/manifest.json',
   icons: {
-    icon: '/icon.svg',
-    apple: '/icon.svg',
+    icon: '/BLS-Kicker-App/icon.svg',
+    apple: '/BLS-Kicker-App/icon.svg',
   },
 };
 
