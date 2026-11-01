@@ -88,26 +88,90 @@ ALTER TABLE public.tournaments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.invite_codes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.whitelist ENABLE ROW LEVEL SECURITY;
 
--- Leseberechtigung für alle authentifizierten Ligamitglieder
-CREATE POLICY "Alle dürfen Whitelist lesen" ON public.whitelist FOR SELECT USING (true);
-CREATE POLICY "Admins dürfen Whitelist bearbeiten" ON public.whitelist FOR ALL USING (true);
+-- 5.1 Hilfsfunktion: Prüft ob der aktuelle User Administrator ist
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE auth_user_id = auth.uid() AND role = 'admin'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Leseberechtigung für alle authentifizierten Ligamitglieder
-CREATE POLICY "Alle Spieler dürfen Profile lesen" ON public.profiles FOR SELECT USING (true);
-CREATE POLICY "Alle Spieler dürfen Matches lesen" ON public.matches FOR SELECT USING (true);
-CREATE POLICY "Alle Spieler dürfen Turniere lesen" ON public.tournaments FOR SELECT USING (true);
+-- 5.2 Whitelist Policies
+CREATE POLICY "Jeder darf Whitelist einsehen" ON public.whitelist 
+FOR SELECT USING (true);
 
--- Eigene Profile bearbeiten
-CREATE POLICY "Spieler dürfen eigenes Profil bearbeiten" ON public.profiles 
-FOR UPDATE USING (auth.uid() = auth_user_id);
+CREATE POLICY "Nur Admins dürfen Whitelist bearbeiten" ON public.whitelist 
+FOR ALL TO authenticated 
+USING (public.is_admin()) 
+WITH CHECK (public.is_admin());
 
--- Matches anlegen
-CREATE POLICY "Spieler dürfen Matches melden" ON public.matches 
-FOR INSERT WITH CHECK (true);
+-- 5.3 Profile Policies
+CREATE POLICY "Jeder darf Profile lesen" ON public.profiles 
+FOR SELECT USING (true);
 
--- Matches bestätigen
-CREATE POLICY "Beteiligte dürfen Matches aktualisieren" ON public.matches 
-FOR UPDATE USING (true);
+CREATE POLICY "Nutzer dürfen eigenes Profil bei Registrierung anlegen" ON public.profiles 
+FOR INSERT TO authenticated 
+WITH CHECK (auth.uid() = auth_user_id);
+
+CREATE POLICY "Nutzer dürfen eigenes Profil bearbeiten ohne Rollen-Eskalation" ON public.profiles 
+FOR UPDATE TO authenticated 
+USING (auth.uid() = auth_user_id OR public.is_admin())
+WITH CHECK (
+  public.is_admin() OR (
+    auth.uid() = auth_user_id AND
+    role = (SELECT p.role FROM public.profiles p WHERE p.auth_user_id = auth.uid())
+  )
+);
+
+-- 5.4 Matches Policies
+CREATE POLICY "Jeder darf Matches lesen" ON public.matches 
+FOR SELECT USING (true);
+
+CREATE POLICY "Authentifizierte Spieler dürfen Matches melden" ON public.matches 
+FOR INSERT TO authenticated 
+WITH CHECK (auth.uid() IS NOT NULL);
+
+CREATE POLICY "Beteiligte Spieler und Admins dürfen Matches aktualisieren" ON public.matches 
+FOR UPDATE TO authenticated 
+USING (
+  public.is_admin() OR
+  EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE p.auth_user_id = auth.uid()
+      AND (p.id = ANY(team_a) OR p.id = ANY(team_b) OR p.id = creator_id)
+  )
+);
+
+-- 5.5 Turniere Policies
+CREATE POLICY "Jeder darf Turniere lesen" ON public.tournaments 
+FOR SELECT USING (true);
+
+CREATE POLICY "Admins und Turnierleiter dürfen Turniere verwalten" ON public.tournaments 
+FOR ALL TO authenticated 
+USING (
+  public.is_admin() OR EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE p.auth_user_id = auth.uid() AND p.role IN ('admin', 'tournament_director')
+  )
+)
+WITH CHECK (
+  public.is_admin() OR EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE p.auth_user_id = auth.uid() AND p.role IN ('admin', 'tournament_director')
+  )
+);
+
+-- 5.6 Invite Codes Policies
+CREATE POLICY "Jeder darf Einladungscodes prüfen" ON public.invite_codes 
+FOR SELECT USING (true);
+
+CREATE POLICY "Nur Admins dürfen Einladungscodes anlegen und bearbeiten" ON public.invite_codes 
+FOR ALL TO authenticated 
+USING (public.is_admin())
+WITH CHECK (public.is_admin());
 
 -- Standard-Einladungscode einfügen
 INSERT INTO public.invite_codes (code, max_uses, is_active)

@@ -28,6 +28,9 @@ export default function RootLayout({
   return (
     <html lang="de" className="dark">
       <head>
+        <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data: blob:; worker-src 'self' blob:;" />
+        <meta name="referrer" content="strict-origin-when-cross-origin" />
+        <meta http-equiv="X-Content-Type-Options" content="nosniff" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link

@@ -42,6 +42,18 @@ export function AdminView() {
     setTimeout(() => setNotification(null), 3000);
   };
 
+  if (currentUser?.role !== 'admin') {
+    return (
+      <div className="p-8 text-center felt-card space-y-3 border-red-800/40">
+        <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto" />
+        <h2 className="text-xl font-bold text-white">Zugriff verweigert</h2>
+        <p className="text-sm text-stone-400">
+          Dieser Bereich ist ausschließlich Administratoren der BLS Kicker League vorbehalten.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 pb-24">
       {/* Header */}

@@ -25,10 +25,4 @@ export const INITIAL_WHITELIST: WhitelistEntry[] = [
     addedBy: 'system',
     createdAt: '2026-11-01',
   },
-  {
-    id: 'wl_admin',
-    pattern: 'runekamprolf@gmail.com',
-    addedBy: 'system',
-    createdAt: '2026-11-01',
-  },
 ];

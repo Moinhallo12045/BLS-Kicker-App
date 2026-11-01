@@ -248,7 +248,7 @@ export function ConfirmationDrawer({ isOpen, onClose }: ConfirmationDrawerProps)
                       <strong>Ursprünglich eingetragen:</strong> {m.scoreA} : {m.scoreB}
                       {m.disputeReason && (
                         <div className="mt-1 text-[11px] text-amber-300/90 italic">
-                          "{m.disputeReason}"
+                          &quot;{m.disputeReason}&quot;
                         </div>
                       )}
                     </div>

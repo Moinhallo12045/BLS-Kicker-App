@@ -14,11 +14,12 @@ import { calculateEloChange, getAverageElo } from './elo';
 import { getXpForNextLevel, MATCH_XP } from './levels';
 import { supabase } from './supabaseClient';
 
-export const MASTER_ADMIN_EMAILS: string[] = [
-  'runekamprolf@gmail.com',
-  'rune.kamprolf@law-school.de',
-  (process.env.NEXT_PUBLIC_ADMIN_EMAIL || '').toLowerCase().trim(),
-].filter(Boolean);
+export const MASTER_ADMIN_EMAILS: string[] = (
+  process.env.NEXT_PUBLIC_ADMIN_EMAIL || ''
+)
+  .split(',')
+  .map((e) => e.toLowerCase().trim())
+  .filter(Boolean);
 
 interface StoreContextType {
   currentUser: Player | null;
@@ -50,7 +51,7 @@ interface StoreContextType {
   logout: () => void;
   updatePlayerRole: (playerId: string, newRole: PlayerRole) => void;
   // Email Whitelist & Verification Flow
-  checkWhitelistAndSendCode: (email: string) => Promise<{ success: boolean; code?: string; message: string; isExistingPlayer?: boolean }>;
+  checkWhitelistAndSendCode: (email: string) => Promise<{ success: boolean; message: string; isExistingPlayer?: boolean }>;
   verifyCode: (email: string, code: string) => Promise<{ success: boolean; message: string; isExistingPlayer?: boolean }>;
   completeProfileCreation: (params: { email: string; name: string; avatar: string }) => { success: boolean; message: string };
   addWhitelistEntry: (pattern: string) => { success: boolean; message: string };
@@ -413,8 +414,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     const existingPlayer = players.find((p) => p.email.toLowerCase() === email);
 
-    // Generate 6 digit code
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate cryptographically secure 6 digit code
+    let code = '';
+    if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
+      const randomValues = new Uint32Array(1);
+      window.crypto.getRandomValues(randomValues);
+      code = (100000 + (randomValues[0] % 900000)).toString();
+    } else {
+      code = Math.floor(100000 + Math.random() * 900000).toString();
+    }
     const expiresAt = Date.now() + 15 * 60 * 1000; // 15 mins
 
     setPendingVerifications((prev) => ({
@@ -456,7 +464,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     return {
       success: true,
-      code,
       isExistingPlayer: Boolean(existingPlayer),
       message: infoNotice,
     };
@@ -471,11 +478,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     // 1. Verify against Supabase OTP if connected
     if (supabase) {
       try {
-        const { error } = await supabase.auth.verifyOtp({
+        let { error } = await supabase.auth.verifyOtp({
           email,
           token: cleanCode,
           type: 'email',
         });
+        // Fallback for new signups where Supabase might expect type: 'signup'
+        if (error) {
+          const signupRes = await supabase.auth.verifyOtp({
+            email,
+            token: cleanCode,
+            type: 'signup',
+          });
+          if (!signupRes.error) {
+            error = null;
+          }
+        }
         if (!error) {
           isCodeValid = true;
         } else {

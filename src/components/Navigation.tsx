@@ -64,10 +64,10 @@ export function Navigation({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Quick user switcher when multiple players exist */}
-            {players.length > 1 && (
+            {/* Quick user switcher only available in local development mode */}
+            {process.env.NODE_ENV === 'development' && players.length > 1 && (
               <div className="hidden sm:flex items-center bg-emerald-950/60 border border-emerald-800/50 rounded-full px-2.5 py-1 text-xs">
-                <span className="text-emerald-400/70 mr-1.5 text-[11px]">Angemeldet als:</span>
+                <span className="text-emerald-400/70 mr-1.5 text-[11px]">Angemeldet als (Dev):</span>
                 <select
                   value={currentUser?.id || ''}
                   onChange={(e) => switchUser(e.target.value)}
