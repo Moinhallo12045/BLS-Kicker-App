@@ -475,17 +475,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    const { data: whitelistResult, error: whitelistError } = await supabase.rpc(
-      'is_email_whitelisted',
-      { candidate_email: email }
-    );
-    if (whitelistError || !whitelistResult) {
-      return {
-        success: false,
-        message: 'Diese E-Mail ist nicht freigeschaltet. Bitte wende dich an den Spielleiter/Admin.',
-      };
-    }
-
     const existingPlayer = players.find((p) => p.email.toLowerCase() === email);
 
     const { error } = await supabase.auth.signInWithOtp({
@@ -502,7 +491,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return {
       success: true,
       isExistingPlayer: Boolean(existingPlayer),
-      message: `Verifikationscode an ${email} gesendet! Bitte prüfe dein Postfach (auch Spam-Ordner).`,
+      message: `Verifikationscode angefordert. Bitte prüfe dein Postfach (auch Spam-Ordner).`,
     };
   };
 

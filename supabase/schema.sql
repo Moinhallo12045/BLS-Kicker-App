@@ -125,11 +125,6 @@ DECLARE
 BEGIN
   RETURN EXISTS (
     SELECT 1
-    FROM public.profiles
-    WHERE lower(email) = normalized_email
-      AND role = 'owner'
-  ) OR EXISTS (
-    SELECT 1
     FROM public.whitelist
     WHERE lower(pattern) = normalized_email
        OR (left(pattern, 1) = '@' AND normalized_email LIKE '%' || lower(pattern))
@@ -137,7 +132,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
-GRANT EXECUTE ON FUNCTION public.is_email_whitelisted(TEXT) TO anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.is_email_whitelisted(TEXT) FROM anon;
+GRANT EXECUTE ON FUNCTION public.is_email_whitelisted(TEXT) TO authenticated;
 
 -- 5.2 Whitelist Policies
 CREATE POLICY "Nur Admins dürfen Whitelist bearbeiten" ON public.whitelist 
