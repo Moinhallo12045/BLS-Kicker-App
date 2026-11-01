@@ -192,7 +192,7 @@ BEGIN
           (CASE WHEN p_mode = '1v1' THEN GREATEST(100, elo_1v1 + delta) ELSE elo_1v1 END) +
           (CASE WHEN p_mode = '2v2' THEN GREATEST(100, elo_2v2 + delta) ELSE elo_2v2 END)
         ) / 2
-      )),
+      ))),
       updated_at = NOW()
     WHERE id = player_id;
   END LOOP;
