@@ -493,7 +493,7 @@ export function TournamentView() {
                     className="w-full bg-emerald-950/80 border border-emerald-800 rounded-xl p-2.5 text-white focus:outline-none"
                   >
                     <option value="1v1">Einzel (1v1)</option>
-                    <option value="2v2">Doppel (2v2)</option>
+                    <option value="2v2" disabled>Doppel (2v2) – folgt</option>
                   </select>
                 </div>
               </div>
