@@ -935,12 +935,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         const isComplete = t.type === 'ko'
           ? Boolean(finalMatch?.winnerId)
           : updatedMatches.every((m) => m.winnerId !== undefined);
+        const tournamentWinner = t.type === 'ko'
+          ? finalMatch?.winnerId
+          : [...t.participants].sort((a, b) => {
+              const score = (playerId: string) =>
+                updatedMatches.reduce((total, match) => {
+                  if (match.winnerId !== playerId) return total;
+                  return total + 3;
+                }, 0);
+              return score(b) - score(a);
+            })[0];
 
         return {
           ...t,
           matches: updatedMatches,
           status: isComplete ? 'completed' : 'running',
-          winnerId: isComplete ? finalMatch?.winnerId : undefined,
+          winnerId: isComplete ? tournamentWinner : undefined,
         };
       })
     );

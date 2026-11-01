@@ -22,6 +22,7 @@ export function TournamentView() {
   const [newDesc, setNewDesc] = useState('');
   const [newType, setNewType] = useState<'ko' | 'groups' | 'round_robin'>('ko');
   const [newMode, setNewMode] = useState<MatchMode>('1v1');
+  const [createError, setCreateError] = useState<string | null>(null);
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>(
     players.slice(0, 8).map((p) => p.id)
   );
@@ -71,7 +72,19 @@ export function TournamentView() {
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName.trim() || selectedParticipants.length < 2) return;
+    if (!newName.trim()) {
+      setCreateError('Bitte einen Turniernamen eingeben.');
+      return;
+    }
+    if (newType === 'ko' && ![8, 16, 32, 64].includes(selectedParticipants.length)) {
+      setCreateError('K.-o.-Turniere benötigen 8, 16, 32 oder 64 Teilnehmer.');
+      return;
+    }
+    if (newType !== 'ko' && selectedParticipants.length < 2) {
+      setCreateError('Mindestens zwei Teilnehmer auswählen.');
+      return;
+    }
+    setCreateError(null);
 
     createTournament({
       name: newName.trim(),
@@ -84,6 +97,7 @@ export function TournamentView() {
     setShowCreateModal(false);
     setNewName('');
     setNewDesc('');
+    setCreateError(null);
   };
 
   const handleScoreSubmit = () => {
@@ -159,7 +173,7 @@ export function TournamentView() {
                     : 'bg-amber-500/20 text-amber-400'
                 }`}
               >
-                {t.status === 'running' ? 'Läuft' : 'Geplant'}
+                {t.status === 'running' ? 'Läuft' : t.status === 'completed' ? 'Beendet' : 'Geplant'}
               </span>
             </div>
             <div className="text-[10px] text-emerald-400/60 mt-0.5">
@@ -180,6 +194,11 @@ export function TournamentView() {
               <p className="text-xs text-emerald-300/80 mt-1 max-w-xl">
                 {currentTourney.description}
               </p>
+              {currentTourney.status === 'completed' && currentTourney.winnerId && (
+                <p className="mt-2 text-xs font-bold text-amber-300">
+                  🏆 Sieger: {getPlayer(currentTourney.winnerId)?.name || 'Unbekannt'}
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-2 text-xs">
               <div className="px-3 py-1.5 rounded-lg bg-[#07160f] border border-emerald-800/60 text-emerald-300">
@@ -448,6 +467,11 @@ export function TournamentView() {
             </div>
 
             <div className="space-y-3 text-xs">
+              {createError && (
+                <div className="rounded-xl border border-red-700/50 bg-red-950/40 p-2.5 text-red-200">
+                  {createError}
+                </div>
+              )}
               <div>
                 <label className="block text-emerald-300 font-semibold mb-1">Turniername</label>
                 <input

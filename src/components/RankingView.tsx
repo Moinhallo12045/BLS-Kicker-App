@@ -1,16 +1,41 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Trophy, Flame, ChevronRight, Info, Shield, Award, Sparkles } from 'lucide-react';
+import { Trophy, Flame, ChevronRight, Info } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { Player } from '@/types';
 
-type RankingFilter = 'elo' | 'wochen' | 'level' | 'aktiv' | '1v1' | '2v2';
+type RankingFilter = 'elo' | 'wochen' | 'level' | 'aktiv' | '1v1' | '2v2' | 'monat' | 'turnier' | 'historie';
 
 export function RankingView() {
-  const { players, currentUser } = useStore();
+  const { players, matches, tournaments, currentUser } = useStore();
   const [activeFilter, setActiveFilter] = useState<RankingFilter>('elo');
   const [showRulesModal, setShowRulesModal] = useState(false);
+
+  const currentMonthKey = new Date().toISOString().slice(0, 7);
+  const monthlyMatches = matches.filter(
+    (match) => match.date.startsWith(currentMonthKey) && !['disputed', 'cancelled'].includes(match.status)
+  );
+  const monthlyStats = new Map<string, { games: number; points: number }>();
+  monthlyMatches.forEach((match) => {
+    [...match.teamA, ...match.teamB].forEach((playerId) => {
+      const current = monthlyStats.get(playerId) || { games: 0, points: 0 };
+      const isTeamA = match.teamA.includes(playerId);
+      const won = isTeamA ? match.scoreA > match.scoreB : match.scoreB > match.scoreA;
+      monthlyStats.set(playerId, {
+        games: current.games + 1,
+        points: current.points + (won ? 3 : 0),
+      });
+    });
+  });
+  const tournamentWins = new Map<string, number>();
+  tournaments.forEach((tournament) => {
+    if (tournament.status !== 'completed' || !tournament.winnerId) return;
+    tournamentWins.set(
+      tournament.winnerId,
+      (tournamentWins.get(tournament.winnerId) || 0) + 1
+    );
+  });
 
   // Split into active ranked players (>= 3 matches) and provisional / new players (< 3 matches)
   const isQualifying = (p: Player) => (p.wins1v1 + p.losses1v1 + p.wins2v2 + p.losses2v2) >= 3;
@@ -34,6 +59,17 @@ export function RankingView() {
         return b.leaguePoints !== a.leaguePoints
           ? b.leaguePoints - a.leaguePoints
           : b.wins1v1 + b.wins2v2 - (a.wins1v1 + a.wins2v2);
+      case 'monat':
+        return (monthlyStats.get(b.id)?.points || 0) - (monthlyStats.get(a.id)?.points || 0)
+          || (monthlyStats.get(b.id)?.games || 0) - (monthlyStats.get(a.id)?.games || 0);
+      case 'turnier':
+        return (tournamentWins.get(b.id) || 0) - (tournamentWins.get(a.id) || 0)
+          || b.eloTotal - a.eloTotal;
+      case 'historie': {
+        const latestA = a.eloHistory[a.eloHistory.length - 1]?.elo || a.eloTotal;
+        const latestB = b.eloHistory[b.eloHistory.length - 1]?.elo || b.eloTotal;
+        return latestB - latestA;
+      }
       default:
         return b.eloTotal - a.eloTotal;
     }
@@ -67,6 +103,9 @@ export function RankingView() {
           { id: 'aktiv', label: 'Aktivität' },
           { id: '1v1', label: 'Einzel' },
           { id: '2v2', label: 'Doppel' },
+          { id: 'monat', label: 'Monat' },
+          { id: 'turnier', label: 'Turniere' },
+          { id: 'historie', label: 'Historie' },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -111,6 +150,15 @@ export function RankingView() {
             } else if (activeFilter === 'level') {
               mainStat = player.level;
               subStat = 'Lvl';
+            } else if (activeFilter === 'monat') {
+              mainStat = monthlyStats.get(player.id)?.points || 0;
+              subStat = 'Pkt';
+            } else if (activeFilter === 'turnier') {
+              mainStat = tournamentWins.get(player.id) || 0;
+              subStat = 'Siege';
+            } else if (activeFilter === 'historie') {
+              mainStat = player.eloHistory[player.eloHistory.length - 1]?.elo || player.eloTotal;
+              subStat = 'ELO';
             }
 
             return (
@@ -171,7 +219,8 @@ export function RankingView() {
                     </div>
                   )}
                   <div className="font-mono text-base font-black text-white tracking-tight">
-                    {mainStat}
+                    <span>{mainStat}</span>
+                    <span className="text-[9px] text-emerald-400/60">{subStat}</span>
                   </div>
                 </div>
               </div>
