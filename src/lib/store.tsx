@@ -562,8 +562,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       return { success: false, message: 'Bitte einen Spielernamen eingeben.' };
     }
     const currentYear = new Date().getFullYear();
-    if (!Number.isInteger(yearJoined) || yearJoined < currentYear - 100 || yearJoined > currentYear) {
-      return { success: false, message: 'Bitte einen gültigen Jahrgang auswählen.' };
+    if (!Number.isInteger(yearJoined) || yearJoined < 2000 || yearJoined > currentYear) {
+      return { success: false, message: 'Bitte einen gültigen Uni-Jahrgang auswählen.' };
     }
 
     if (!supabase) {

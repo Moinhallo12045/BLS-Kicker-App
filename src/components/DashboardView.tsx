@@ -79,7 +79,7 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
                 )}
               </h2>
               <div className="text-xs text-amber-200/80 font-medium">
-                {tier.tier} • Jahrgang {currentUser.yearJoined}
+                {tier.tier} • Uni-Jahrgang {currentUser.yearJoined}
               </div>
             </div>
           </div>

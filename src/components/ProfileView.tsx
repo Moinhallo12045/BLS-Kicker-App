@@ -65,7 +65,7 @@ export function ProfileView() {
             </div>
 
             <p className="text-xs text-emerald-300/80 mt-0.5">
-              {tier.tier} • Jahrgang {currentUser.yearJoined} • ID: #{currentUser.id.slice(-6)}
+              {tier.tier} • Uni-Jahrgang {currentUser.yearJoined} • ID: #{currentUser.id.slice(-6)}
             </p>
 
             <div className="mt-3 flex items-center justify-center sm:justify-start gap-2 flex-wrap">

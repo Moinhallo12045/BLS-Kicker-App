@@ -311,13 +311,13 @@ export function AuthLandingView() {
                 Profil einrichten
               </h3>
               <p className="text-xs text-emerald-300/80 mt-0.5">
-                Wähle deinen Spielernamen, Jahrgang und dein Liga-Icon
+                Wähle deinen Spielernamen, Uni-Jahrgang und dein Liga-Icon
               </p>
             </div>
 
             <div>
               <label className="block text-xs font-bold text-emerald-200 mb-1">
-                Dein Jahrgang
+                Dein Uni-Jahrgang
               </label>
               <select
                 required
@@ -325,8 +325,8 @@ export function AuthLandingView() {
                 onChange={(e) => setYearJoined(e.target.value)}
                 className="w-full bg-[#0a2014] border border-emerald-700/60 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-amber-400 font-bold"
               >
-                <option value="" disabled>Jahrgang auswählen</option>
-                {Array.from({ length: new Date().getFullYear() - 1900 + 1 }, (_, index) => {
+                <option value="" disabled>Uni-Jahrgang auswählen</option>
+                {Array.from({ length: new Date().getFullYear() - 2000 + 1 }, (_, index) => {
                   const year = new Date().getFullYear() - index;
                   return <option key={year} value={year}>{year}</option>;
                 })}
