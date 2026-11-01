@@ -10,11 +10,9 @@ import {
   Flame, 
   Trophy, 
   Target, 
-  Share2, 
   ShieldCheck, 
   RefreshCw,
   Sparkles,
-  Check,
   LogOut
 } from 'lucide-react';
 
@@ -23,7 +21,6 @@ const AVATAR_OPTIONS = ['🎯', '⚽', '👑', '🔥', '⚡', '🦁', '🎱', '�
 export function ProfileView() {
   const { currentUser, players, resetToDefaultData, logout } = useStore();
   const [selectedAvatar, setSelectedAvatar] = useState(currentUser?.avatar || '⚽');
-  const [copiedLink, setCopiedLink] = useState(false);
 
   if (!currentUser) return null;
 
@@ -36,12 +33,6 @@ export function ProfileView() {
 
   const totalMatches2v2 = currentUser.wins2v2 + currentUser.losses2v2;
   const quote2v2 = totalMatches2v2 > 0 ? Math.round((currentUser.wins2v2 / totalMatches2v2) * 100) : 0;
-
-  const handleCopyInvite = () => {
-    navigator.clipboard?.writeText(window.location.origin + '?invite=KICKER2026');
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2000);
-  };
 
   return (
     <div className="space-y-6 pb-24">
@@ -78,14 +69,6 @@ export function ProfileView() {
             </p>
 
             <div className="mt-3 flex items-center justify-center sm:justify-start gap-2 flex-wrap">
-              <button
-                onClick={handleCopyInvite}
-                className="px-3 py-1.5 rounded-lg bg-emerald-900/60 hover:bg-emerald-800 border border-emerald-700/50 text-xs font-semibold text-emerald-200 flex items-center gap-1.5 transition-colors"
-              >
-                {copiedLink ? <Check className="w-3.5 h-3.5 text-neon-lime" /> : <Share2 className="w-3.5 h-3.5" />}
-                {copiedLink ? 'Link kopiert!' : 'Einladungslink teilen'}
-              </button>
-
               <button
                 onClick={logout}
                 className="px-3 py-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 border border-red-700/50 text-xs font-semibold text-red-300 flex items-center gap-1.5 transition-colors"

@@ -7,16 +7,7 @@ export const INITIAL_MATCHES: Match[] = [];
 
 export const INITIAL_TOURNAMENTS: Tournament[] = [];
 
-export const INITIAL_INVITE_CODES: InviteCode[] = [
-  {
-    code: 'KICKER2026',
-    createdBy: 'system',
-    createdAt: '2026-11-01',
-    usedBy: [],
-    maxUses: 100,
-    isActive: true,
-  },
-];
+export const INITIAL_INVITE_CODES: InviteCode[] = [];
 
 export const INITIAL_WHITELIST: WhitelistEntry[] = [
   {
