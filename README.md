@@ -7,7 +7,7 @@ Eine moderne, hochwertige und mobiloptimierte Web-App (PWA) für geschlossene Ti
 ## 🌟 Hauptfunktionen
 
 1. **Dashboard & Spielerkarte**:
-   - Begrüßung des angemeldeten Spielers (standardmäßig *Birk*, frei wechselbar)
+   - Begrüßung des angemeldeten Spielers mit Spielerkarte und Uni-Jahrgang
    - ELO-Rating (Einzel & Doppel getrennt sowie Gesamtwertung), Ligapunkte, Level & Rangklasse
    - Interaktiver Level-Fortschrittsbalken (1 bis 50 Level) mit Konfetti-Animation bei Level-Aufstieg
    - **Aufgaben der Woche** mit XP-Belohnungen
@@ -18,20 +18,18 @@ Eine moderne, hochwertige und mobiloptimierte Web-App (PWA) für geschlossene Ti
 2. **Ranglisten-System**:
    - Filter nach **Elo**, **Wochenzocker**, **Level**, **Aktivität**, **Einzel (1v1)** und **Doppel (2v2)**
    - Medaillen im Lorbeerkranz-Design (Gold, Silber, Bronze, Smaragd)
-   - Jahrgangsanzeige (z.B. Jg. 2022, 2025), Siegesserien-Flammen (🔥) und ELO-Gewinn
+   - Anzeige des frei wählbaren Uni-Jahrgangs, Siegesserien-Flammen (🔥) und ELO-Gewinn
+   - **Krabbler-der-Woche-Leaderboard** für 0:…-Niederlagen der laufenden Woche
    - Spezieller Bereich *"Neu dabei – In der Elo-Rangliste ab 3 Spielen"* für Einsteiger
 
-3. **Spieleintrags- & Bestätigungsworkflow**:
+3. **Spieleintrags- & Widerspruchsworkflow**:
    - Umschalten zwischen **1 gegen 1** und **2 gegen 2**
    - Interaktive Teamauswahl (*Ich*, *+ Partner*, *+ Gegner 1*, *+ Gegner 2*)
    - Spieler-Schnellauswahl mit Suchfeld
    - Torzähler bis 10 Tore inklusive Presets (10:7, 10:5, 10:8, 10:0, ...)
-   - **Bestätigungspflicht**: Die Gegenseite erhält eine Anfrage unter *"Neu für dich"*. Erst nach Bestätigung erfolgt die offizielle serverseitige ELO-Berechnung.
-   - **"Stimmt nicht?" / Einigung unter den Spielern**:
-     Bei Unstimmigkeiten wird das Spiel nicht über einen Admin eskaliert, sondern direkt zwischen den beteiligten Spielern geklärt:
-     1. Der beanstandende Spieler gibt das aus seiner Sicht korrekte Ergebnis (z.B. 8:10) und einen Kommentar ein.
-     2. Die Gegenseite sieht diesen Gegenvorschlag unter *"Neu für dich"* oder im Reiter *"Spiele"*.
-     3. Sie kann den Gegenvorschlag mit einem Klick annehmen (Ergebnis wird sofort offiziell gewertet & ELO aktualisiert) oder das Spiel im gegenseitigen Einvernehmen streichen.
+   - **Sofort wirksam**: Das eingetragene Ergebnis wird unmittelbar gewertet. Die Gegenseite erhält unter *"Neu für dich"* eine Benachrichtigung.
+   - **Widerspruch statt Freigabe**: Die Gegenseite kann das Ergebnis als gesehen markieren oder widersprechen. Nur widersprochene Spiele werden als strittig behandelt.
+   - **Direkte Einigung**: Bei einem Widerspruch kann ein Gegenvorschlag gemacht und von der Gegenseite angenommen werden; alternativ kann das Spiel im gegenseitigen Einvernehmen gestrichen oder administrativ entschieden werden.
 
 4. **Turniermodus**:
    - **K.-o.-Turnier**: Interaktiver visueller Turnierbaum mit Viertelfinale, Halbfinale, Finale und automatischem Weiterkommen der Sieger nach Ergebniseingabe.
@@ -43,9 +41,13 @@ Eine moderne, hochwertige und mobiloptimierte Web-App (PWA) für geschlossene Ti
    - Direkter Duell-Vergleich (*Head-to-Head*): Bilanz zweier Spieler, gemeinsame Spiele und Tore.
 
 6. **Geschlossenes Registrierungs- & Rechtesystem**:
-   - Kein anonymer Zugang: Registrierung ausschließlich mit Einladungscode (z.B. `KICKER2026`).
-   - Rollensystem: **Administrator**, **Turnierleitung**, **Spieler**.
-   - Admin-Panel zum Verwalten von Einladungscodes und Rollenvergabe.
+   - Registrierung nur für E-Mail-Adressen oder Domains auf der serverseitigen Whitelist.
+   - Rollensystem: **Owner**, **Co-Owner**, **Admin**, **Organiser**, **Player**.
+   - **Owner**: vollständige Verwaltung und Ernennung von Co-Ownern, Admins, Organisern und Playern.
+   - **Co-Owner**: Server-Admin-Rechte für andere Accounts und Verwaltungsdaten, aber keine Bearbeitung der eigenen Rolle, des Owners oder Vergabe der Owner-Rolle.
+   - **Admin**: Whitelist, Einladungscodes und Moderation; keine Rollenänderungen.
+   - **Organiser**: Turniere und Turniermatches; keine Rollen- oder Whitelistverwaltung.
+   - **Player**: eigene Profil- und Spielfunktionen.
 
 ---
 
@@ -55,6 +57,13 @@ Eine moderne, hochwertige und mobiloptimierte Web-App (PWA) für geschlossene Ti
 - **Hosting**: GitHub Pages (Kostenlos über GitHub Actions)
 - **Datenbank & Auth**: Supabase (Free Tier: 500 MB Datenbank, 50.000 monatlich aktive Nutzer)
 - **Offline & Demomodus**: Integrierter LocalStorage-Fallback für sofortige Nutzung ohne Einrichtungsaufwand
+
+### Datenbank und Migrationen
+
+- Supabase-Migrationen liegen unter [`supabase/migrations`](supabase/migrations).
+- Der GitHub-Actions-Workflow [`supabase-migrate.yml`](.github/workflows/supabase-migrate.yml) spielt neue Migrationen automatisch auf das verknüpfte Projekt ein.
+- Die produktive Autorisierung erfolgt serverseitig über Supabase-RLS, Trigger und Security-Definer-Funktionen; Client-Zustände oder LocalStorage vergeben keine Rechte.
+- Für eine leere Übergabe-Datenbank nur Datensätze löschen, niemals Tabellen, RLS oder Funktionen. Owner-Mail und erlaubte Domain anschließend in der Whitelist hinterlegen und die Owner-Rolle einmalig serverseitig setzen.
 
 ---
 

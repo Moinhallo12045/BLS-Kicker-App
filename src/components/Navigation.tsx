@@ -32,10 +32,10 @@ export function Navigation({
 }: NavigationProps) {
   const { currentUser, matches, players, switchUser } = useStore();
 
-  // Pending matches that require confirmation from the current user
+  // Effective matches that still need to be acknowledged by the current user
   const pendingForMe = matches.filter(
     (m) =>
-      m.status === 'pending' &&
+      !['disputed', 'cancelled'].includes(m.status) &&
       (m.teamA.includes(currentUser?.id || '') || m.teamB.includes(currentUser?.id || '')) &&
       !m.confirmedBy.includes(currentUser?.id || '')
   );
@@ -86,7 +86,7 @@ export function Navigation({
             <button
               onClick={onOpenConfirmations}
               className="relative p-2 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-800/50 text-emerald-300 transition-all hover:scale-105"
-              title="Neu für dich - Bestätigungen"
+              title="Neu für dich - Spielergebnisse"
             >
               <Bell className="w-5 h-5" />
               {pendingForMe.length > 0 && (

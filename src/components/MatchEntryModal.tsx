@@ -447,7 +447,7 @@ export function MatchEntryModal({ isOpen, onClose }: MatchEntryModalProps) {
         </button>
 
         <p className="text-[10px] text-center text-emerald-400/60">
-          * Der Gegner erhält eine Bestätigungsanfrage. Erst nach Bestätigung erfolgt die Wertung.
+          * Das Ergebnis ist sofort wirksam. Der Gegner wird benachrichtigt und kann widersprechen.
         </p>
       </div>
     </div>

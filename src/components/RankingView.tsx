@@ -272,10 +272,10 @@ export function RankingView() {
 
               <div className="p-3 rounded-xl bg-emerald-950/60 border border-emerald-800/40">
                 <h4 className="font-bold text-amber-400 text-sm mb-1">
-                  4. Bestätigungspflicht
+                  4. Ergebnis melden & widersprechen
                 </h4>
                 <p>
-                  Nach der Eintragung erhält die Gegenseite eine Bestätigungsanfrage. Erst nach Bestätigung wird das Ergebnis offiziell gewertet. Bei Unstimmigkeiten greift die Turnierleitung/Admin ein.
+                  Ein eingetragenes Ergebnis ist sofort wirksam. Die Gegenseite erhält eine Benachrichtigung und kann es als gesehen markieren oder widersprechen. Bei einem Widerspruch wird das Spiel gemeinsam oder durch die Administration geklärt.
                 </p>
               </div>
             </div>

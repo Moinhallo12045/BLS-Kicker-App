@@ -75,7 +75,7 @@ export function ConfirmationDrawer({ isOpen, onClose }: ConfirmationDrawerProps)
             Neu für dich
           </h3>
           <p className="text-xs text-emerald-300/80 mt-0.5">
-            Ergebnisse bestätigen oder strittige Spiele direkt untereinander klären
+            Neue Ergebnisse ansehen oder strittige Spiele direkt untereinander klären
           </p>
         </div>
 
