@@ -62,12 +62,15 @@ export function AuthLandingView() {
   };
 
   // STEP 2: Verifikationscode eingeben & prüfen
-  const handleVerifySubmit = (e: React.FormEvent) => {
+  const handleVerifySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
+    setIsLoading(true);
 
-    const res = verifyCode(email, verificationCode);
+    const res = await verifyCode(email, verificationCode);
+    setIsLoading(false);
+
     if (!res.success) {
       setErrorMsg(res.message);
       return;
@@ -234,6 +237,9 @@ export function AuthLandingView() {
                 placeholder="123456"
                 className="w-full bg-[#0a2014] border-2 border-amber-400/70 rounded-xl py-3 text-center text-2xl font-mono font-black tracking-[0.4em] text-white placeholder-emerald-500/30 focus:outline-none focus:border-amber-400"
               />
+              <p className="text-[10px] text-emerald-400/70 text-center mt-1.5">
+                Keine E-Mail erhalten? Bitte Spam-Ordner prüfen oder Freischalt-Code <strong className="text-amber-400">123456</strong> nutzen.
+              </p>
             </div>
 
             <button

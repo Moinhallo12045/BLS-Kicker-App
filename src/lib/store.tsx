@@ -51,7 +51,7 @@ interface StoreContextType {
   updatePlayerRole: (playerId: string, newRole: PlayerRole) => void;
   // Email Whitelist & Verification Flow
   checkWhitelistAndSendCode: (email: string) => Promise<{ success: boolean; code?: string; message: string; isExistingPlayer?: boolean }>;
-  verifyCode: (email: string, code: string) => { success: boolean; message: string; isExistingPlayer?: boolean };
+  verifyCode: (email: string, code: string) => Promise<{ success: boolean; message: string; isExistingPlayer?: boolean }>;
   completeProfileCreation: (params: { email: string; name: string; avatar: string }) => { success: boolean; message: string };
   addWhitelistEntry: (pattern: string) => { success: boolean; message: string };
   removeWhitelistEntry: (id: string) => void;
@@ -422,37 +422,92 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       [email]: { code, expiresAt },
     }));
 
+    let supabaseErrorMsg: string | null = null;
+
     // If Supabase is connected, trigger official Supabase OTP
     if (supabase) {
       try {
-        await supabase.auth.signInWithOtp({ email });
-      } catch (err) {
-        console.warn('Supabase signInWithOtp note:', err);
+        const { error } = await supabase.auth.signInWithOtp({
+          email,
+          options: {
+            shouldCreateUser: true,
+          },
+        });
+        if (error) {
+          console.warn('Supabase signInWithOtp error:', error.message);
+          supabaseErrorMsg = error.message;
+        }
+      } catch (err: any) {
+        console.warn('Supabase signInWithOtp exception:', err);
+        supabaseErrorMsg = err?.message || 'Verbindung zu Supabase fehlgeschlagen';
       }
     }
+
+    if (supabaseErrorMsg) {
+      return {
+        success: false,
+        message: `Supabase E-Mail-Fehler: "${supabaseErrorMsg}". Du kannst dich alternativ direkt mit Notfall-Code 123456 anmelden.`,
+      };
+    }
+
+    const infoNotice = supabase
+      ? `Verifikationscode an ${email} gesendet! (Bitte auch Spam-Ordner prüfen)`
+      : `Code angefordert! (Hinweis: Supabase E-Mail-Dienst ist noch nicht aktiv - nutze Freischalt-Code 123456)`;
 
     return {
       success: true,
       code,
       isExistingPlayer: Boolean(existingPlayer),
-      message: `Verifikationscode an ${email} gesendet!`,
+      message: infoNotice,
     };
   };
 
-  const verifyCode = (rawEmail: string, enteredCode: string) => {
+  const verifyCode = async (rawEmail: string, enteredCode: string): Promise<{ success: boolean; message: string; isExistingPlayer?: boolean }> => {
     const email = rawEmail.trim().toLowerCase();
-    const record = pendingVerifications[email];
     const cleanCode = enteredCode.trim();
 
-    if (!record || record.code !== cleanCode) {
-      // Also accept master backup code 123456
-      if (cleanCode !== '123456') {
-        return { success: false, message: 'Ungültiger Verifikationscode. Bitte prüfe die Eingabe.' };
+    let isCodeValid = false;
+
+    // 1. Master Bypass Code (emergency / test code)
+    if (cleanCode === '123456') {
+      isCodeValid = true;
+    }
+
+    // 2. Verify against Supabase OTP if connected
+    if (!isCodeValid && supabase) {
+      try {
+        const { error } = await supabase.auth.verifyOtp({
+          email,
+          token: cleanCode,
+          type: 'email',
+        });
+        if (!error) {
+          isCodeValid = true;
+        } else {
+          console.warn('Supabase verifyOtp note:', error.message);
+        }
+      } catch (err) {
+        console.warn('Supabase verifyOtp exception:', err);
       }
     }
 
-    if (record && Date.now() > record.expiresAt) {
-      return { success: false, message: 'Der Code ist abgelaufen. Bitte neu anfordern.' };
+    // 3. Verify against locally generated code
+    if (!isCodeValid) {
+      const record = pendingVerifications[email];
+      if (record && record.code === cleanCode) {
+        if (Date.now() <= record.expiresAt) {
+          isCodeValid = true;
+        } else {
+          return { success: false, message: 'Der Code ist abgelaufen. Bitte neu anfordern.' };
+        }
+      }
+    }
+
+    if (!isCodeValid) {
+      return {
+        success: false,
+        message: 'Ungültiger Code. Bitte Postfach prüfen oder Notfall-Code 123456 eingeben.',
+      };
     }
 
     const existingPlayer = players.find((p) => p.email.toLowerCase() === email);
