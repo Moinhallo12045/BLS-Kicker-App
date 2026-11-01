@@ -633,14 +633,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       eloHistory: [{ date: new Date().toISOString().split('T')[0], elo: 1000 }],
     };
 
-    const { error: profileError } = await supabase.from('profiles').insert({
-      id: newPlayerId,
-      auth_user_id: session.user.id,
-      name: cleanName,
-      avatar: avatar || '⚽',
-      email,
-      year_joined: yearJoined,
-      role: assignedRole,
+    const { error: profileError } = await supabase.rpc('create_player_profile', {
+      p_name: cleanName,
+      p_avatar: avatar || '⚽',
+      p_year_joined: yearJoined,
     });
     if (profileError) {
       return { success: false, message: `Profil konnte nicht erstellt werden: ${profileError.message}` };
