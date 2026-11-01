@@ -116,7 +116,7 @@ BEGIN
     WHERE auth_user_id = auth.uid() AND role IN ('owner', 'co_owner', 'admin')
   ) OR public.is_owner();
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 CREATE OR REPLACE FUNCTION public.is_email_whitelisted(candidate_email TEXT)
 RETURNS BOOLEAN AS $$
@@ -188,10 +188,10 @@ REVOKE ALL ON FUNCTION public.create_player_profile(TEXT, TEXT, INT) FROM PUBLIC
 GRANT EXECUTE ON FUNCTION public.create_player_profile(TEXT, TEXT, INT) TO authenticated;
 
 -- 5.2 Whitelist Policies
-CREATE POLICY "Nur Admins dürfen Whitelist bearbeiten" ON public.whitelist 
-FOR ALL TO authenticated 
-USING (public.is_admin()) 
-WITH CHECK (public.is_admin());
+CREATE POLICY "Nur Admins dürfen Whitelist bearbeiten" ON public.whitelist
+FOR ALL TO authenticated
+USING ((SELECT public.is_admin()))
+WITH CHECK ((SELECT public.is_admin()));
 
 -- 5.3 Profile Policies
 CREATE POLICY "Jeder darf Profile lesen" ON public.profiles 
@@ -200,17 +200,17 @@ FOR SELECT USING (true);
 CREATE POLICY "Nutzer dürfen eigenes Profil bei Registrierung anlegen" ON public.profiles 
 FOR INSERT TO authenticated 
 WITH CHECK (
-  auth.uid() = auth_user_id
-  AND (role = 'player' OR public.is_master_admin())
+  (SELECT auth.uid()) = auth_user_id
+  AND (role = 'player' OR (SELECT public.is_master_admin()))
 );
 
 CREATE POLICY "Nutzer dürfen eigenes Profil bearbeiten ohne Rollen-Eskalation" ON public.profiles 
-FOR UPDATE TO authenticated 
-USING (auth.uid() = auth_user_id OR public.is_admin())
+FOR UPDATE TO authenticated
+USING ((SELECT auth.uid()) = auth_user_id OR (SELECT public.is_admin()))
 WITH CHECK (
-  public.is_admin() OR (
-    auth.uid() = auth_user_id AND
-    role = (SELECT p.role FROM public.profiles p WHERE p.auth_user_id = auth.uid())
+  (SELECT public.is_admin()) OR (
+    (SELECT auth.uid()) = auth_user_id AND
+    role = (SELECT p.role FROM public.profiles p WHERE p.auth_user_id = (SELECT auth.uid()))
   )
 );
 
@@ -220,23 +220,32 @@ FOR SELECT USING (true);
 
 CREATE POLICY "Authentifizierte Spieler dürfen Matches melden" ON public.matches 
 FOR INSERT TO authenticated 
-WITH CHECK (auth.uid() IS NOT NULL);
+WITH CHECK (
+  (SELECT auth.uid()) IS NOT NULL
+  AND EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.auth_user_id = (SELECT auth.uid())
+      AND p.id = creator_id
+      AND (p.id = ANY(team_a) OR p.id = ANY(team_b))
+  )
+);
 
 CREATE POLICY "Beteiligte Spieler und Admins dürfen Matches aktualisieren" ON public.matches 
 FOR UPDATE TO authenticated 
 USING (
-  public.is_admin() OR
+  (SELECT public.is_admin()) OR
   EXISTS (
     SELECT 1 FROM public.profiles p
-    WHERE p.auth_user_id = auth.uid()
+    WHERE p.auth_user_id = (SELECT auth.uid())
       AND (p.id = ANY(team_a) OR p.id = ANY(team_b) OR p.id = creator_id)
   )
 )
 WITH CHECK (
-  public.is_admin() OR
+  (SELECT public.is_admin()) OR
   EXISTS (
     SELECT 1 FROM public.profiles p
-    WHERE p.auth_user_id = auth.uid()
+    WHERE p.auth_user_id = (SELECT auth.uid())
       AND (p.id = ANY(team_a) OR p.id = ANY(team_b) OR p.id = creator_id)
   )
 );
@@ -248,23 +257,23 @@ FOR SELECT USING (true);
 CREATE POLICY "Admins und Turnierleiter dürfen Turniere verwalten" ON public.tournaments 
 FOR ALL TO authenticated 
 USING (
-  public.is_admin() OR EXISTS (
+  (SELECT public.is_admin()) OR EXISTS (
     SELECT 1 FROM public.profiles p
-    WHERE p.auth_user_id = auth.uid() AND p.role IN ('owner', 'co_owner', 'admin', 'organiser')
+    WHERE p.auth_user_id = (SELECT auth.uid()) AND p.role IN ('owner', 'co_owner', 'admin', 'organiser')
   )
 )
 WITH CHECK (
-  public.is_admin() OR EXISTS (
+  (SELECT public.is_admin()) OR EXISTS (
     SELECT 1 FROM public.profiles p
-    WHERE p.auth_user_id = auth.uid() AND p.role IN ('owner', 'co_owner', 'admin', 'organiser')
+    WHERE p.auth_user_id = (SELECT auth.uid()) AND p.role IN ('owner', 'co_owner', 'admin', 'organiser')
   )
 );
 
 -- 5.6 Invite Codes Policies
 CREATE POLICY "Nur Admins dürfen Einladungscodes anlegen und bearbeiten" ON public.invite_codes 
 FOR ALL TO authenticated 
-USING (public.is_admin())
-WITH CHECK (public.is_admin());
+USING ((SELECT public.is_admin()))
+WITH CHECK ((SELECT public.is_admin()));
 
 CREATE OR REPLACE FUNCTION public.consume_invite_code(candidate_code TEXT)
 RETURNS BOOLEAN AS $$
