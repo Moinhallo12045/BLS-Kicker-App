@@ -103,7 +103,7 @@ export interface InviteCode {
 
 export interface WhitelistEntry {
   id: string;
-  pattern: string; // specific email e.g. "alex@firma.de" or domain e.g. "@otto.de"
+  pattern: string; // specific email e.g. "rune@law-school.de" or domain e.g. "@law-school.de"
   addedBy: string;
   createdAt: string;
 }

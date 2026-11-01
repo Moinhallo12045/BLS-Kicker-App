@@ -16,7 +16,7 @@ import { supabase } from './supabaseClient';
 
 export const MASTER_ADMIN_EMAILS: string[] = [
   'runekamprolf@gmail.com',
-  'rune.kamprolf@otto.de',
+  'rune.kamprolf@law-school.de',
   (process.env.NEXT_PUBLIC_ADMIN_EMAIL || '').toLowerCase().trim(),
 ].filter(Boolean);
 
@@ -63,7 +63,7 @@ interface StoreContextType {
 
 const StoreContext = createContext<StoreContextType | null>(null);
 
-const STORAGE_KEY = 'bls_kicker_app_state_v4';
+const STORAGE_KEY = 'bls_kicker_app_state_v5';
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [players, setPlayers] = useState<Player[]>(INITIAL_PLAYERS);

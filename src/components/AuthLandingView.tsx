@@ -183,7 +183,7 @@ export function AuthLandingView() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@otto.de"
+                placeholder="vorname.nachname@law-school.de"
                 className="w-full bg-[#0a2014] border border-emerald-700/60 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-emerald-500/40 focus:outline-none focus:border-amber-400 font-medium"
               />
               <p className="text-[10px] text-emerald-400/70 mt-1.5">

@@ -291,7 +291,7 @@ export function AdminView() {
             required
             value={newWhitelistPattern}
             onChange={(e) => setNewWhitelistPattern(e.target.value.toLowerCase())}
-            placeholder="z.B. @otto.de oder kollege@firma.de"
+            placeholder="z.B. @law-school.de oder gast@partner.de"
             className="flex-1 bg-emerald-950/80 border border-emerald-800 rounded-xl px-3 py-2 text-xs text-white placeholder-emerald-400/50 focus:outline-none focus:border-amber-400 font-mono"
           />
           <button

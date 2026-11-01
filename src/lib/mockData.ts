@@ -21,7 +21,7 @@ export const INITIAL_INVITE_CODES: InviteCode[] = [
 export const INITIAL_WHITELIST: WhitelistEntry[] = [
   {
     id: 'wl_domain',
-    pattern: '@otto.de',
+    pattern: '@law-school.de',
     addedBy: 'system',
     createdAt: '2026-11-01',
   },
