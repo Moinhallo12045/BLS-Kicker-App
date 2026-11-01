@@ -37,9 +37,10 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  IF actor_role = 'co_owner' AND (OLD.auth_user_id = auth.uid() OR OLD.role = 'owner') THEN
+  IF actor_role = 'co_owner'
+     AND (OLD.auth_user_id = auth.uid() OR OLD.role = 'owner' OR NEW.role = 'owner') THEN
     IF NEW.role IS DISTINCT FROM OLD.role THEN
-      RAISE EXCEPTION 'Co-owner cannot change their own role or the owner role';
+      RAISE EXCEPTION 'Co-owner cannot change their own role, the owner role, or assign the owner role';
     END IF;
   ELSIF actor_role <> 'owner' AND NEW.role IS DISTINCT FROM OLD.role THEN
     RAISE EXCEPTION 'Only the owner or an eligible co-owner may change roles';

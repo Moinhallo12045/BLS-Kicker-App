@@ -267,8 +267,18 @@ BEGIN
   END IF;
 
   IF NOT public.is_owner() THEN
-    IF NEW.role IS DISTINCT FROM OLD.role THEN
-      RAISE EXCEPTION 'Only the owner may change roles';
+    IF EXISTS (
+      SELECT 1
+      FROM public.profiles
+      WHERE auth_user_id = auth.uid()
+        AND role = 'co_owner'
+    ) THEN
+      IF (OLD.auth_user_id = auth.uid() OR OLD.role = 'owner' OR NEW.role = 'owner')
+         AND NEW.role IS DISTINCT FROM OLD.role THEN
+        RAISE EXCEPTION 'Co-owner cannot change their own role, the owner role, or assign the owner role';
+      END IF;
+    ELSIF NEW.role IS DISTINCT FROM OLD.role THEN
+      RAISE EXCEPTION 'Only the owner or an eligible co-owner may change roles';
     END IF;
     IF NEW.auth_user_id IS DISTINCT FROM OLD.auth_user_id
        OR NEW.email IS DISTINCT FROM OLD.email
