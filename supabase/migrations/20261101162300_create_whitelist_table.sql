@@ -7,6 +7,26 @@ CREATE TABLE IF NOT EXISTS public.whitelist (
 
 ALTER TABLE public.whitelist ENABLE ROW LEVEL SECURITY;
 
+CREATE OR REPLACE FUNCTION public.is_master_admin()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN lower(coalesce(auth.jwt() ->> 'email', '')) = 'runekamprolf@gmail.com';
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN public.is_master_admin()
+    OR EXISTS (
+      SELECT 1
+      FROM public.profiles
+      WHERE auth_user_id = auth.uid()
+        AND role = 'admin'
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
 DROP POLICY IF EXISTS "Admins dürfen Whitelist lesen" ON public.whitelist;
 CREATE POLICY "Admins dürfen Whitelist lesen"
   ON public.whitelist
