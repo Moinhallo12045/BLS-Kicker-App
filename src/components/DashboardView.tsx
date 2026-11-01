@@ -40,6 +40,24 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
   // Recent 3 matches
   const recentMatches = matches.slice(0, 3);
 
+  const weekStart = new Date();
+  weekStart.setHours(0, 0, 0, 0);
+  const dayOfWeek = weekStart.getDay() || 7;
+  weekStart.setDate(weekStart.getDate() - dayOfWeek + 1);
+  const weekStartKey = weekStart.toISOString().split('T')[0];
+  const weeklyCrawlers = matches
+    .filter((match) => match.status === 'confirmed' && match.date >= weekStartKey)
+    .flatMap((match) => {
+      if (match.scoreA === 0 && match.scoreB > 0) {
+        return [{ match, playerIds: match.teamA, winningScore: match.scoreB }];
+      }
+      if (match.scoreB === 0 && match.scoreA > 0) {
+        return [{ match, playerIds: match.teamB, winningScore: match.scoreA }];
+      }
+      return [];
+    })
+    .sort((a, b) => b.winningScore - a.winningScore);
+
   // XP Progress Percentage
   const xpPercent = Math.min(100, Math.round((currentUser.xp / currentUser.xpNextLevel) * 100));
 
@@ -203,6 +221,29 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="felt-card p-4 border border-amber-700/40 bg-amber-950/20">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-display text-lg font-bold text-amber-300 flex items-center gap-2">
+            🦀 Krabbler der Woche
+          </h3>
+          <span className="text-[11px] text-amber-400/80 font-medium">0:{weeklyCrawlers.length ? weeklyCrawlers[0].winningScore : '–'}</span>
+        </div>
+        {weeklyCrawlers.length === 0 ? (
+          <p className="text-xs text-stone-400">Noch niemand musste diese Woche krabbeln.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {weeklyCrawlers.slice(0, 3).map(({ match, playerIds, winningScore }) => (
+              <div key={match.id} className="flex items-center justify-between rounded-lg bg-amber-950/30 px-2.5 py-2">
+                <span className="text-xs font-bold text-white">
+                  {playerIds.map((id) => players.find((player) => player.id === id)?.name || 'Unbekannt').join(' & ')}
+                </span>
+                <span className="text-xs font-black text-amber-300">0:{winningScore}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Abzeichen Showcase (Directly matches Screenshot 2) */}

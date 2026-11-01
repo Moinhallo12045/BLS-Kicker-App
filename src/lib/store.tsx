@@ -226,7 +226,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const newMatch: Match = {
       id: newMatchId,
       mode,
-      date: 'Gerade eben',
+      date: new Date().toISOString().split('T')[0],
       creatorId: currentUser.id,
       teamA,
       teamB,
