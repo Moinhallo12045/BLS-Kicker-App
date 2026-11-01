@@ -810,20 +810,69 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       matches: [],
     };
 
+    const shuffled = [...participants].sort(() => Math.random() - 0.5);
+    const matches = [];
+
     if (type === 'ko') {
-      const shuffled = [...participants].sort(() => Math.random() - 0.5);
-      const matches = [];
-      for (let i = 0; i < shuffled.length; i += 2) {
+      const bracketSize = 2 ** Math.ceil(Math.log2(Math.max(2, shuffled.length)));
+      const bracketPlayers = [...shuffled, ...Array<string | undefined>(bracketSize - shuffled.length)];
+      const rounds = Math.log2(bracketSize);
+
+      for (let i = 0; i < bracketSize; i += 2) {
         matches.push({
           id: `tm_${Date.now()}_${i}`,
           round: 1,
           matchIndex: Math.floor(i / 2),
-          playerAId: shuffled[i],
-          playerBId: shuffled[i + 1] || undefined,
+          playerAId: bracketPlayers[i],
+          playerBId: bracketPlayers[i + 1],
+          winnerId: bracketPlayers[i + 1] ? undefined : bracketPlayers[i],
         });
       }
-      newTourney.matches = matches;
+
+      for (let round = 2; round <= rounds; round += 1) {
+        const matchesInRound = bracketSize / 2 ** round;
+        for (let matchIndex = 0; matchIndex < matchesInRound; matchIndex += 1) {
+          matches.push({
+            id: `tm_${Date.now()}_r${round}_i${matchIndex}`,
+            round,
+            matchIndex,
+            playerAId: undefined,
+            playerBId: undefined,
+          });
+        }
+      }
+
+      for (let round = 1; round < rounds; round += 1) {
+        const currentRound = matches.filter((match) => match.round === round);
+        const nextRound = matches.filter((match) => match.round === round + 1);
+        currentRound.forEach((match) => {
+          if (!match.winnerId) return;
+          const nextMatch = nextRound[Math.floor(match.matchIndex / 2)];
+          if (match.matchIndex % 2 === 0) nextMatch.playerAId = match.winnerId;
+          else nextMatch.playerBId = match.winnerId;
+        });
+        nextRound.forEach((match) => {
+          if (match.playerAId && !match.playerBId) match.winnerId = match.playerAId;
+          if (match.playerBId && !match.playerAId) match.winnerId = match.playerBId;
+        });
+      }
+    } else {
+      let matchIndex = 0;
+      for (let i = 0; i < shuffled.length; i += 1) {
+        for (let j = i + 1; j < shuffled.length; j += 1) {
+          matches.push({
+            id: `tm_${Date.now()}_${matchIndex}`,
+            round: 1,
+            matchIndex,
+            playerAId: shuffled[i],
+            playerBId: shuffled[j],
+          });
+          matchIndex += 1;
+        }
+      }
     }
+
+    newTourney.matches = matches;
 
     setTournaments((prev) => [newTourney, ...prev]);
   };
@@ -834,12 +883,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     scoreA: number,
     scoreB: number
   ) => {
+    if (!Number.isInteger(scoreA) || !Number.isInteger(scoreB) || scoreA < 0 || scoreB < 0 || scoreA === scoreB) {
+      return;
+    }
+
     setTournaments((prev) =>
       prev.map((t) => {
         if (t.id !== tournamentId) return t;
 
         const updatedMatches = t.matches.map((m) => {
           if (m.id !== matchId) return m;
+          if (!m.playerAId || !m.playerBId) return m;
           const winnerId = scoreA > scoreB ? m.playerAId : m.playerBId;
           return {
             ...m,
@@ -850,7 +904,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         });
 
         const currentMatch = updatedMatches.find((m) => m.id === matchId);
-        if (currentMatch && t.type === 'ko') {
+        if (currentMatch && currentMatch.winnerId && t.type === 'ko') {
           const winnerId = currentMatch.winnerId;
           const nextRound = currentMatch.round + 1;
           const nextIndex = Math.floor(currentMatch.matchIndex / 2);
@@ -860,7 +914,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             (m) => m.round === nextRound && m.matchIndex === nextIndex
           );
 
-          if (!nextMatch) {
+          if (!nextMatch && currentMatch.round < Math.ceil(Math.log2(Math.max(2, t.participants.length)))) {
             nextMatch = {
               id: `tm_${t.id}_r${nextRound}_i${nextIndex}`,
               round: nextRound,
@@ -869,15 +923,34 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               playerBId: !isPlayerA ? winnerId : undefined,
             };
             updatedMatches.push(nextMatch);
-          } else {
+          } else if (nextMatch) {
             if (isPlayerA) nextMatch.playerAId = winnerId;
             else nextMatch.playerBId = winnerId;
           }
         }
 
+        const finalMatch = updatedMatches.find(
+          (m) => m.round === Math.max(...updatedMatches.map((match) => match.round)) && m.playerAId && m.playerBId
+        );
+        const isComplete = t.type === 'ko'
+          ? Boolean(finalMatch?.winnerId)
+          : updatedMatches.every((m) => m.winnerId !== undefined);
+        const tournamentWinner = t.type === 'ko'
+          ? finalMatch?.winnerId
+          : [...t.participants].sort((a, b) => {
+              const score = (playerId: string) =>
+                updatedMatches.reduce((total, match) => {
+                  if (match.winnerId !== playerId) return total;
+                  return total + 3;
+                }, 0);
+              return score(b) - score(a);
+            })[0];
+
         return {
           ...t,
           matches: updatedMatches,
+          status: isComplete ? 'completed' : 'running',
+          winnerId: isComplete ? tournamentWinner : undefined,
         };
       })
     );

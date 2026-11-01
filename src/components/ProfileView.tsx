@@ -27,6 +27,13 @@ export function ProfileView() {
   const sorted = [...players].sort((a, b) => b.eloTotal - a.eloTotal);
   const rank = sorted.findIndex((p) => p.id === currentUser.id) + 1;
   const tier = getTierForLevel(currentUser.level);
+  const roleLabel = {
+    owner: 'Owner',
+    co_owner: 'Co-Owner',
+    admin: 'Admin',
+    organiser: 'Organiser',
+    player: 'Spieler',
+  }[currentUser.role];
 
   const totalMatches1v1 = currentUser.wins1v1 + currentUser.losses1v1;
   const quote1v1 = totalMatches1v1 > 0 ? Math.round((currentUser.wins1v1 / totalMatches1v1) * 100) : 0;
@@ -57,9 +64,9 @@ export function ProfileView() {
               <h2 className="font-display text-2xl font-bold text-white">
                 {currentUser.name}
               </h2>
-              {['owner', 'co_owner', 'admin'].includes(currentUser.role) && (
+              {currentUser.role !== 'player' && (
                 <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold">
-                  Admin
+                  {roleLabel}
                 </span>
               )}
             </div>

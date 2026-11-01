@@ -6,7 +6,14 @@ import { Tournament, TournamentMatch, MatchMode } from '@/types';
 import { Crown, Trophy, Users, Plus, Check, Play, ChevronRight, Award } from 'lucide-react';
 
 export function TournamentView() {
-  const { tournaments, players, currentUser, createTournament, advanceTournamentMatch } = useStore();
+  const {
+    tournaments,
+    players,
+    currentUser,
+    createTournament,
+    advanceTournamentMatch,
+    submitMatch,
+  } = useStore();
   const [selectedTourneyId, setSelectedTourneyId] = useState<string>(tournaments[0]?.id || '');
   const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -15,6 +22,7 @@ export function TournamentView() {
   const [newDesc, setNewDesc] = useState('');
   const [newType, setNewType] = useState<'ko' | 'groups' | 'round_robin'>('ko');
   const [newMode, setNewMode] = useState<MatchMode>('1v1');
+  const [createError, setCreateError] = useState<string | null>(null);
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>(
     players.slice(0, 8).map((p) => p.id)
   );
@@ -27,10 +35,56 @@ export function TournamentView() {
   const currentTourney = tournaments.find((t) => t.id === selectedTourneyId) || tournaments[0];
 
   const getPlayer = (id?: string) => (id ? players.find((p) => p.id === id) : null);
+  const standings = currentTourney
+    ? currentTourney.participants
+        .map((playerId) => {
+          const playerMatches = currentTourney.matches.filter(
+            (match) => match.playerAId === playerId || match.playerBId === playerId
+          );
+          const wins = playerMatches.filter((match) => match.winnerId === playerId).length;
+          const losses = playerMatches.filter(
+            (match) => match.winnerId && match.winnerId !== playerId
+          ).length;
+          const scored = playerMatches.reduce(
+            (total, match) =>
+              total +
+              (match.playerAId === playerId ? match.scoreA || 0 : match.scoreB || 0),
+            0
+          );
+          const conceded = playerMatches.reduce(
+            (total, match) =>
+              total +
+              (match.playerAId === playerId ? match.scoreB || 0 : match.scoreA || 0),
+            0
+          );
+          return {
+            playerId,
+            games: wins + losses,
+            wins,
+            losses,
+            scored,
+            conceded,
+            points: wins * 3,
+          };
+        })
+        .sort((a, b) => b.points - a.points || b.scored - a.scored || a.conceded - b.conceded)
+    : [];
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName.trim() || selectedParticipants.length < 2) return;
+    if (!newName.trim()) {
+      setCreateError('Bitte einen Turniernamen eingeben.');
+      return;
+    }
+    if (newType === 'ko' && ![8, 16, 32, 64].includes(selectedParticipants.length)) {
+      setCreateError('K.-o.-Turniere benötigen 8, 16, 32 oder 64 Teilnehmer.');
+      return;
+    }
+    if (newType !== 'ko' && selectedParticipants.length < 2) {
+      setCreateError('Mindestens zwei Teilnehmer auswählen.');
+      return;
+    }
+    setCreateError(null);
 
     createTournament({
       name: newName.trim(),
@@ -43,10 +97,23 @@ export function TournamentView() {
     setShowCreateModal(false);
     setNewName('');
     setNewDesc('');
+    setCreateError(null);
   };
 
   const handleScoreSubmit = () => {
     if (!activeScoringMatch || !currentTourney) return;
+    if (!activeScoringMatch.playerAId || !activeScoringMatch.playerBId) return;
+    if (!Number.isInteger(scoreA) || !Number.isInteger(scoreB) || scoreA < 0 || scoreB < 0 || scoreA === scoreB) {
+      return;
+    }
+    const result = submitMatch({
+      mode: currentTourney.mode,
+      teamA: [activeScoringMatch.playerAId],
+      teamB: [activeScoringMatch.playerBId],
+      scoreA,
+      scoreB,
+    });
+    if (!result.success) return;
     advanceTournamentMatch(currentTourney.id, activeScoringMatch.id, scoreA, scoreB);
     setActiveScoringMatch(null);
   };
@@ -106,7 +173,7 @@ export function TournamentView() {
                     : 'bg-amber-500/20 text-amber-400'
                 }`}
               >
-                {t.status === 'running' ? 'Läuft' : 'Geplant'}
+                {t.status === 'running' ? 'Läuft' : t.status === 'completed' ? 'Beendet' : 'Geplant'}
               </span>
             </div>
             <div className="text-[10px] text-emerald-400/60 mt-0.5">
@@ -127,6 +194,11 @@ export function TournamentView() {
               <p className="text-xs text-emerald-300/80 mt-1 max-w-xl">
                 {currentTourney.description}
               </p>
+              {currentTourney.status === 'completed' && currentTourney.winnerId && (
+                <p className="mt-2 text-xs font-bold text-amber-300">
+                  🏆 Sieger: {getPlayer(currentTourney.winnerId)?.name || 'Unbekannt'}
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-2 text-xs">
               <div className="px-3 py-1.5 rounded-lg bg-[#07160f] border border-emerald-800/60 text-emerald-300">
@@ -178,7 +250,7 @@ export function TournamentView() {
                               <div
                                 key={m.id}
                                 onClick={() => {
-                                  if (pA && pB) {
+                                  if (pA && pB && !isDone) {
                                     setActiveScoringMatch(m);
                                     setScoreA(m.scoreA || 10);
                                     setScoreB(m.scoreB || 7);
@@ -239,11 +311,38 @@ export function TournamentView() {
             </div>
           )}
 
-          {/* Round Robin Table View */}
-          {currentTourney.type === 'round_robin' && (
+          {/* Group and round-robin standings */}
+          {(currentTourney.type === 'groups' || currentTourney.type === 'round_robin') && (
             <div className="space-y-4">
               <div className="text-xs font-bold text-emerald-300">
-                Tabelle: Jeder gegen Jeden
+                Tabelle: {currentTourney.type === 'groups' ? 'Gruppenphase' : 'Jeder gegen Jeden'}
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {currentTourney.matches.map((match) => {
+                  const pA = getPlayer(match.playerAId);
+                  const pB = getPlayer(match.playerBId);
+                  if (!pA || !pB) return null;
+                  return (
+                    <button
+                      key={match.id}
+                      type="button"
+                      disabled={match.winnerId !== undefined}
+                      onClick={() => {
+                        setActiveScoringMatch(match);
+                        setScoreA(match.scoreA || 10);
+                        setScoreB(match.scoreB || 7);
+                      }}
+                      className="rounded-xl border border-emerald-800/50 bg-emerald-950/50 p-2 text-left text-xs disabled:opacity-60"
+                    >
+                      <span className="font-semibold text-white">{pA.name}</span>
+                      <span className="px-1.5 text-emerald-400">vs.</span>
+                      <span className="font-semibold text-white">{pB.name}</span>
+                      <span className="float-right font-mono text-amber-300">
+                        {match.winnerId ? `${match.scoreA}:${match.scoreB}` : 'Ergebnis eintragen'}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs text-left">
@@ -259,20 +358,20 @@ export function TournamentView() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-emerald-900/30">
-                    {currentTourney.participants.map((pid, idx) => {
-                      const p = getPlayer(pid);
+                    {standings.map((standing, idx) => {
+                      const p = getPlayer(standing.playerId);
                       return (
-                        <tr key={pid} className="hover:bg-emerald-950/40">
+                        <tr key={standing.playerId} className="hover:bg-emerald-950/40">
                           <td className="p-2.5 font-bold text-amber-400">{idx + 1}</td>
                           <td className="p-2.5 font-semibold text-white flex items-center gap-2">
                             <span>{p?.avatar}</span>
                             <span>{p?.name}</span>
                           </td>
-                          <td className="p-2.5 text-center font-mono">3</td>
-                          <td className="p-2.5 text-center text-neon-lime font-mono">2</td>
-                          <td className="p-2.5 text-center text-red-400 font-mono">1</td>
-                          <td className="p-2.5 text-center font-mono">28 : 22</td>
-                          <td className="p-2.5 text-right font-black text-amber-400 text-sm">6</td>
+                          <td className="p-2.5 text-center font-mono">{standing.games}</td>
+                          <td className="p-2.5 text-center text-neon-lime font-mono">{standing.wins}</td>
+                          <td className="p-2.5 text-center text-red-400 font-mono">{standing.losses}</td>
+                          <td className="p-2.5 text-center font-mono">{standing.scored} : {standing.conceded}</td>
+                          <td className="p-2.5 text-right font-black text-amber-400 text-sm">{standing.points}</td>
                         </tr>
                       );
                     })}
@@ -368,6 +467,11 @@ export function TournamentView() {
             </div>
 
             <div className="space-y-3 text-xs">
+              {createError && (
+                <div className="rounded-xl border border-red-700/50 bg-red-950/40 p-2.5 text-red-200">
+                  {createError}
+                </div>
+              )}
               <div>
                 <label className="block text-emerald-300 font-semibold mb-1">Turniername</label>
                 <input
@@ -413,7 +517,7 @@ export function TournamentView() {
                     className="w-full bg-emerald-950/80 border border-emerald-800 rounded-xl p-2.5 text-white focus:outline-none"
                   >
                     <option value="1v1">Einzel (1v1)</option>
-                    <option value="2v2">Doppel (2v2)</option>
+                    <option value="2v2" disabled>Doppel (2v2) – folgt</option>
                   </select>
                 </div>
               </div>
