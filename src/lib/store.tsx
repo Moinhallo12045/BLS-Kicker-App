@@ -45,6 +45,7 @@ interface StoreContextType {
   loginPlayer: (nameOrEmail: string) => { success: boolean; message: string };
   logout: () => Promise<void>;
   updatePlayerRole: (playerId: string, newRole: PlayerRole) => Promise<void>;
+  setPlayerSuspension: (playerId: string, suspended: boolean) => Promise<{ success: boolean; message: string }>;
   // Email Whitelist & Verification Flow
   checkWhitelistAndSendCode: (email: string) => Promise<{ success: boolean; message: string; isExistingPlayer?: boolean }>;
   verifyCode: (email: string, code: string) => Promise<{ success: boolean; message: string; isExistingPlayer?: boolean }>;
@@ -151,6 +152,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           currentStreak: profile.current_streak,
           bestRank: profile.best_rank,
           role: profile.role as PlayerRole,
+          isSuspended: profile.is_suspended ?? false,
           badges: profile.badges || [],
           eloHistory: profile.elo_history || [],
         })));
@@ -261,6 +263,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     : null;
   const currentUser = supabase
   ? authenticatedPlayer
+    && !authenticatedPlayer.isSuspended
     ? { ...authenticatedPlayer, role: authIdentity!.role }
     : null
     : localUser;
@@ -367,6 +370,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           currentStreak: profile.current_streak,
           bestRank: profile.best_rank,
           role: profile.role as PlayerRole,
+          isSuspended: profile.is_suspended ?? false,
           badges: profile.badges || [],
           eloHistory: profile.elo_history || [],
         })));
@@ -831,6 +835,26 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     );
   };
 
+  const setPlayerSuspension = async (playerId: string, suspended: boolean) => {
+    if (!currentUser || !['owner', 'co_owner', 'admin'].includes(currentUser.role)) {
+      return { success: false, message: 'Keine Berechtigung.' };
+    }
+    if (playerId === currentUser.id) {
+      return { success: false, message: 'Das eigene Konto kann nicht gesperrt werden.' };
+    }
+    if (supabase) {
+      const { error } = await supabase.rpc('set_player_suspension', {
+        p_player_id: playerId,
+        p_suspended: suspended,
+      });
+      if (error) return { success: false, message: error.message };
+    }
+    setPlayers((prev) =>
+      prev.map((player) => player.id === playerId ? { ...player, isSuspended: suspended } : player)
+    );
+    return { success: true, message: suspended ? 'Spieler gesperrt.' : 'Spieler entsperrt.' };
+  };
+
   const addWhitelistEntry = async (rawPattern: string) => {
     const pattern = rawPattern.trim().toLowerCase();
     if (!pattern) return { success: false, message: 'Muster darf nicht leer sein' };
@@ -1159,6 +1183,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         loginPlayer,
         logout,
         updatePlayerRole,
+        setPlayerSuspension,
         checkWhitelistAndSendCode,
         verifyCode,
         completeProfileCreation,
