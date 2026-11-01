@@ -125,7 +125,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           }))
         );
       });
-  }, [authIdentity?.role]);
+  }, [authIdentity]);
 
   // Save to localStorage on change
   useEffect(() => {
