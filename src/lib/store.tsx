@@ -489,13 +489,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    const isMasterAdminEmail = MASTER_ADMIN_EMAILS.includes(email);
-    const { data: whitelistResult, error: whitelistError } = isMasterAdminEmail
-      ? { data: true, error: null }
-      : await supabase.rpc(
-          'is_email_whitelisted',
-          { candidate_email: email }
-        );
+    const { data: whitelistResult, error: whitelistError } = await supabase.rpc(
+      'is_email_whitelisted',
+      { candidate_email: email }
+    );
     if (whitelistError || !whitelistResult) {
       return {
         success: false,
@@ -593,13 +590,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       return { success: false, message: 'Bitte bestätige zuerst diese E-Mail-Adresse.' };
     }
 
-    const isMasterAdminEmail = MASTER_ADMIN_EMAILS.includes(email);
-    const { data: whitelisted, error: whitelistError } = isMasterAdminEmail
-      ? { data: true, error: null }
-      : await supabase.rpc(
-          'is_email_whitelisted',
-          { candidate_email: email }
-        );
+    const { data: whitelisted, error: whitelistError } = await supabase.rpc(
+      'is_email_whitelisted',
+      { candidate_email: email }
+    );
     if (whitelistError || !whitelisted) {
       return { success: false, message: 'Diese E-Mail ist nicht freigeschaltet.' };
     }
