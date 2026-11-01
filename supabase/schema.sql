@@ -89,13 +89,23 @@ ALTER TABLE public.invite_codes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.whitelist ENABLE ROW LEVEL SECURITY;
 
 -- 5.1 Hilfsfunktion: Prüft ob der aktuelle User Administrator ist
+CREATE OR REPLACE FUNCTION public.is_master_admin()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN lower(coalesce(auth.jwt() ->> 'email', '')) IN (
+    'runekamprolf@gmail.com',
+    'rune.kamprolf@otto.de'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS BOOLEAN AS $$
 BEGIN
   RETURN EXISTS (
     SELECT 1 FROM public.profiles
     WHERE auth_user_id = auth.uid() AND role = 'admin'
-  );
+  ) OR public.is_master_admin();
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -129,7 +139,7 @@ CREATE POLICY "Nutzer dürfen eigenes Profil bei Registrierung anlegen" ON publi
 FOR INSERT TO authenticated 
 WITH CHECK (
   auth.uid() = auth_user_id
-  AND role = 'player'
+  AND (role = 'player' OR public.is_master_admin())
 );
 
 CREATE POLICY "Nutzer dürfen eigenes Profil bearbeiten ohne Rollen-Eskalation" ON public.profiles 
