@@ -16,7 +16,8 @@ export function AdminView() {
     whitelist,
     addWhitelistEntry,
     removeWhitelistEntry,
-    updatePlayerRole
+    updatePlayerRole,
+    setPlayerSuspension,
   } = useStore();
 
   const [newCode, setNewCode] = useState('');
@@ -396,6 +397,23 @@ export function AdminView() {
 
                 {p.id === currentUser?.id && (
                   <span className="text-[10px] text-amber-400/80 font-bold">(Du)</span>
+                )}
+                {p.id !== currentUser?.id && p.role !== 'owner' && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const result = await setPlayerSuspension(p.id, !p.isSuspended);
+                      setNotification(result.message);
+                      setTimeout(() => setNotification(null), 3000);
+                    }}
+                    className={`rounded-lg px-2 py-1 text-[10px] font-bold ${
+                      p.isSuspended
+                        ? 'bg-emerald-700/40 text-emerald-200'
+                        : 'bg-red-900/40 text-red-300'
+                    }`}
+                  >
+                    {p.isSuspended ? 'Entsperren' : 'Sperren'}
+                  </button>
                 )}
               </div>
             </div>
