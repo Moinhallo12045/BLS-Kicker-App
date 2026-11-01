@@ -306,6 +306,27 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const clearLevelModal = () => setNewLevelUnlocked(null);
 
+  const refreshRemoteMatchRatings = async () => {
+    if (!supabase) return;
+    const { data, error } = await supabase
+      .from('matches')
+      .select('id, elo_change_a, elo_change_b, result_applied');
+    if (error || !data) {
+      if (error) console.error('Failed to refresh match ratings:', error);
+      return;
+    }
+    const ratings = new Map(data.map((match) => [match.id, match]));
+    setMatches((prev) => prev.map((match) => {
+      const rating = ratings.get(match.id);
+      return rating ? {
+        ...match,
+        eloChangeA: rating.elo_change_a,
+        eloChangeB: rating.elo_change_b,
+        resultApplied: rating.result_applied,
+      } : match;
+    }));
+  };
+
   const switchUser = (playerId: string) => {
     if (supabase) return;
     setCurrentUserId(playerId);
@@ -680,6 +701,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         console.error('Dispute resolution acceptance failed:', error);
         return;
       }
+      await Promise.all([refreshRemoteProfiles(), refreshRemoteMatchRatings()]);
     }
 
     if (
@@ -710,7 +732,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         console.error('Match cancellation failed:', error);
         return;
       }
-      await refreshRemoteProfiles();
+      await Promise.all([refreshRemoteProfiles(), refreshRemoteMatchRatings()]);
     }
     setMatches((prev) =>
       supabase
@@ -749,6 +771,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         console.error('Admin match resolution failed:', error);
         return;
       }
+      await Promise.all([refreshRemoteProfiles(), refreshRemoteMatchRatings()]);
     }
 
     if (adjustedScoreA !== undefined && adjustedScoreB !== undefined) {
