@@ -91,3 +91,70 @@ $$;
 
 REVOKE ALL ON FUNCTION public.cancel_match(UUID) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.cancel_match(UUID) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.rollback_match_stats_before_delete()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  player_id UUID;
+  in_team_a BOOLEAN;
+  won BOOLEAN;
+  elo_delta INT;
+BEGIN
+  IF NOT OLD.result_applied THEN
+    RETURN OLD;
+  END IF;
+
+  FOREACH player_id IN ARRAY OLD.team_a || OLD.team_b LOOP
+    in_team_a := player_id = ANY(OLD.team_a);
+    won := (in_team_a AND OLD.score_a > OLD.score_b)
+      OR (NOT in_team_a AND OLD.score_b > OLD.score_a);
+    elo_delta := CASE
+      WHEN in_team_a THEN OLD.elo_change_a
+      ELSE OLD.elo_change_b
+    END;
+
+    UPDATE public.profiles
+    SET
+      elo_1v1 = CASE
+        WHEN OLD.mode = '1v1' THEN GREATEST(100, elo_1v1 - elo_delta)
+        ELSE elo_1v1
+      END,
+      elo_2v2 = CASE
+        WHEN OLD.mode = '2v2' THEN GREATEST(100, elo_2v2 - elo_delta)
+        ELSE elo_2v2
+      END,
+      elo_total = round((
+        (CASE
+          WHEN OLD.mode = '1v1' THEN GREATEST(100, elo_1v1 - elo_delta)
+          ELSE elo_1v1
+        END) +
+        (CASE
+          WHEN OLD.mode = '2v2' THEN GREATEST(100, elo_2v2 - elo_delta)
+          ELSE elo_2v2
+        END)
+      ) / 2),
+      league_points = GREATEST(0, league_points - CASE WHEN won THEN 3 ELSE 0 END),
+      wins_1v1 = wins_1v1 - CASE WHEN OLD.mode = '1v1' AND won THEN 1 ELSE 0 END,
+      losses_1v1 = losses_1v1 - CASE WHEN OLD.mode = '1v1' AND NOT won THEN 1 ELSE 0 END,
+      wins_2v2 = wins_2v2 - CASE WHEN OLD.mode = '2v2' AND won THEN 1 ELSE 0 END,
+      losses_2v2 = losses_2v2 - CASE WHEN OLD.mode = '2v2' AND NOT won THEN 1 ELSE 0 END,
+      updated_at = NOW()
+    WHERE id = player_id;
+  END LOOP;
+
+  RETURN OLD;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS rollback_match_stats_on_delete ON public.matches;
+CREATE TRIGGER rollback_match_stats_on_delete
+BEFORE DELETE ON public.matches
+FOR EACH ROW
+EXECUTE FUNCTION public.rollback_match_stats_before_delete();
+
+REVOKE ALL ON FUNCTION public.rollback_match_stats_before_delete() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.rollback_match_stats_before_delete() TO authenticated;
