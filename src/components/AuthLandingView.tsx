@@ -226,16 +226,16 @@ export function AuthLandingView() {
 
             <div>
               <label className="block text-xs font-bold text-amber-300 mb-1 text-center">
-                6-stelliger Verifikationscode
+                Verifikationscode (aus deiner E-Mail)
               </label>
               <input
                 type="text"
                 required
-                maxLength={6}
+                maxLength={8}
                 value={verificationCode}
                 onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
-                placeholder="· · · · · ·"
-                className="w-full bg-[#0a2014] border-2 border-amber-400/70 rounded-xl py-3 text-center text-2xl font-mono font-black tracking-[0.4em] text-white placeholder-emerald-500/30 focus:outline-none focus:border-amber-400"
+                placeholder="Code eingeben"
+                className="w-full bg-[#0a2014] border-2 border-amber-400/70 rounded-xl py-3 text-center text-xl sm:text-2xl font-mono font-black tracking-[0.25em] text-white placeholder-emerald-500/30 focus:outline-none focus:border-amber-400"
               />
               <p className="text-[10px] text-emerald-400/70 text-center mt-1.5">
                 Bitte prüfe auch deinen Spam-/Junk-Ordner nach der Bestätigungs-E-Mail.
