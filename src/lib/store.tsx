@@ -18,7 +18,6 @@ import type { Session } from '@supabase/supabase-js';
 export const MASTER_ADMIN_EMAILS: string[] = (
   [
     'runekamprolf@gmail.com',
-    'rune.kamprolf@otto.de',
     process.env.NEXT_PUBLIC_ADMIN_EMAIL || '',
   ]
     .join(',')

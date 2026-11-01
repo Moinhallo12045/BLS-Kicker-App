@@ -93,8 +93,7 @@ CREATE OR REPLACE FUNCTION public.is_master_admin()
 RETURNS BOOLEAN AS $$
 BEGIN
   RETURN lower(coalesce(auth.jwt() ->> 'email', '')) IN (
-    'runekamprolf@gmail.com',
-    'rune.kamprolf@otto.de'
+    'runekamprolf@gmail.com'
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
