@@ -100,13 +100,13 @@ export function TournamentView() {
     setCreateError(null);
   };
 
-  const handleScoreSubmit = () => {
+  const handleScoreSubmit = async () => {
     if (!activeScoringMatch || !currentTourney) return;
     if (!activeScoringMatch.playerAId || !activeScoringMatch.playerBId) return;
     if (!Number.isInteger(scoreA) || !Number.isInteger(scoreB) || scoreA < 0 || scoreB < 0 || scoreA === scoreB) {
       return;
     }
-    const result = submitMatch({
+    const result = await submitMatch({
       mode: currentTourney.mode,
       teamA: [activeScoringMatch.playerAId],
       teamB: [activeScoringMatch.playerBId],
