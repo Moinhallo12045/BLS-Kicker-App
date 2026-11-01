@@ -77,6 +77,12 @@ psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/match_stats_remov
 
 Der Bootstrap simuliert Supabase-Auth und spielt Schema sowie bisherige Migrationen ein. Der Regressionstest legt Altdaten an, wendet die neue Migration an und prüft Annullierung, Mehrfachlöschung, Ergebnisänderungen, Berechtigungen und Levelgrenzen.
 
+Die Folgemigration `20261101213500_rebuild_match_achievements.sql` bereinigt zusätzlich die sieben spielabhängigen Abzeichen und die beste Platzierung. Beim chronologischen Neuaufbau werden erreichte Erfolge erneut vergeben; ein später verlorenes Spiel entfernt einen früher weiterhin belegten Erfolg nicht. Die beste Platzierung folgt der Gesamt-ELO-Rangliste ab drei Spielen. Turnier-Abzeichen und unbekannte/manuelle Abzeichen bleiben erhalten, ebenso persönliche Profildaten. Neue Spielwertungen aktualisieren diese Erfolge ebenfalls. Zusätzlicher Regressionstest nach den obigen Befehlen:
+
+```bash
+psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/match_achievements.sql
+```
+
 ### Sicherheitsstatus
 
 - RLS ist für Profile, Matches, Turniere, Einladungscodes und Whitelist aktiviert.
