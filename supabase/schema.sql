@@ -132,8 +132,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
-REVOKE EXECUTE ON FUNCTION public.is_email_whitelisted(TEXT) FROM anon;
-GRANT EXECUTE ON FUNCTION public.is_email_whitelisted(TEXT) TO authenticated;
+REVOKE EXECUTE ON FUNCTION public.is_email_whitelisted(TEXT) FROM PUBLIC, anon, authenticated;
 
 CREATE OR REPLACE FUNCTION public.create_player_profile(
   p_name TEXT,
