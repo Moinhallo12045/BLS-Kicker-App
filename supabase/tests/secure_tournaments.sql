@@ -8,6 +8,7 @@
 \ir ../migrations/20261101223000_in_memory_replay.sql
 \ir ../migrations/20261101224000_application_rpc_aliases.sql
 \ir ../migrations/20261101225000_logic_consistency.sql
+\ir ../migrations/20261102123000_restrict_whitelist_check_rpc.sql
 
 CREATE FUNCTION public.test_assert(ok BOOLEAN,message TEXT) RETURNS VOID LANGUAGE plpgsql AS $$
 BEGIN IF ok IS DISTINCT FROM TRUE THEN RAISE EXCEPTION 'Assertion failed: %',message; END IF; END;
@@ -32,6 +33,33 @@ SELECT public.test_assert(NOT has_column_privilege('authenticated','public.profi
 SELECT public.test_assert(NOT has_table_privilege('authenticated','public.profiles','INSERT')
   AND NOT has_table_privilege('authenticated','public.matches','UPDATE')
   AND NOT has_table_privilege('authenticated','public.tournaments','DELETE'),'RPC-only writes');
+SELECT public.test_assert(
+  NOT has_function_privilege('anon','public.is_email_whitelisted(TEXT)','EXECUTE')
+  AND NOT has_function_privilege('authenticated','public.is_email_whitelisted(TEXT)','EXECUTE'),
+  'whitelist check is not a client RPC');
+
+BEGIN;
+SET LOCAL ROLE anon;
+DO $$
+BEGIN
+  BEGIN
+    PERFORM public.is_email_whitelisted('probe@example.com');
+    RAISE EXCEPTION 'Anonymous whitelist probe unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+END;
+$$;
+SET LOCAL ROLE authenticated;
+DO $$
+BEGIN
+  BEGIN
+    PERFORM public.is_email_whitelisted('probe@example.com');
+    RAISE EXCEPTION 'Authenticated whitelist probe unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+END;
+$$;
+ROLLBACK;
 
 BEGIN;
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000010',true);

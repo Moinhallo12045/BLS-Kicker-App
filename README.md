@@ -99,6 +99,7 @@ Die Migrationen `20261101220000` bis `20261101224000` härten die Client-Verträ
 - Die Supabase-Advisor-Warnungen zu authentifizierten `SECURITY DEFINER`-RPCs sind für die von der Anwendung benötigten eingeloggten Aufrufe erwartbar.
 - Die Authentifizierung nutzt OTP/Magic-Link; es werden keine Benutzerpasswörter benötigt.
 - Einladungscodes umgehen die Whitelist nicht. Eine neue Registrierung erfolgt ausschließlich über freigegebene E-Mail und OTP.
+- `is_email_whitelisted` ist nicht direkt durch Clients aufrufbar. Die Profilanlage prüft die Whitelist intern; Owner, Co-Owner und Admins verwalten sie weiterhin über die autorisierten Verwaltungs-RPCs. Bestehende Projekte erhalten diese Einschränkung durch die Migration `20261102123000_restrict_whitelist_check_rpc.sql`.
 - Next.js ist auf eine gepatchte Version aktualisiert. `npm audit --omit=dev` meldet keine bekannten Schwachstellen; im Entwicklungs-Lint-Tooling bleiben 16 moderate Meldungen wegen einer transitiven `minimatch`-Abhängigkeit. Eine inkompatible Major-Version wird nicht erzwungen.
 - GitHub Pages erlaubt hier keine frei konfigurierbaren HTTP-Sicherheitsheader; die unterstützte Content-Security-Policy ist gesetzt, ersetzt aber keine Prüfung der Hosting-Konfiguration.
 - Nach jeder Migration sollte der Supabase Security/Performance Advisor erneut ausgeführt werden. Ein Live-Penetrationstest und die Prüfung der Dashboard-/Projektkonfiguration sind nicht durch den Quellcode ersetzt.

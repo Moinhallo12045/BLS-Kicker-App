@@ -18,6 +18,7 @@ SELECT set_config('app.server_operation','',false);
 \ir ../migrations/20261101223000_in_memory_replay.sql
 \ir ../migrations/20261101224000_application_rpc_aliases.sql
 \ir ../migrations/20261101225000_logic_consistency.sql
+\ir ../migrations/20261102123000_restrict_whitelist_check_rpc.sql
 DO $$
 DECLARE p public.profiles;
 BEGIN
@@ -28,7 +29,9 @@ BEGIN
     RAISE EXCEPTION 'Populated upgrade failed canonical scoring/privacy/badge regression: %',to_jsonb(p);
   END IF;
   IF has_column_privilege('authenticated','public.profiles','email','SELECT')
-    OR has_function_privilege('anon','public.consume_invite_code(TEXT)','EXECUTE') THEN
+    OR has_function_privilege('anon','public.consume_invite_code(TEXT)','EXECUTE')
+    OR has_function_privilege('anon','public.is_email_whitelisted(TEXT)','EXECUTE')
+    OR has_function_privilege('authenticated','public.is_email_whitelisted(TEXT)','EXECUTE') THEN
     RAISE EXCEPTION 'Upgrade leaves private client grants';
   END IF;
 END;
