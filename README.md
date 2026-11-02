@@ -68,7 +68,8 @@ Die Hauptnavigation liegt am unteren Bildschirmrand; große Bedienelemente, Safe
 ### Datenbank und Migrationen
 
 - Supabase-Migrationen liegen unter [`supabase/migrations`](supabase/migrations).
-- Der GitHub-Actions-Workflow [`supabase-migrate.yml`](.github/workflows/supabase-migrate.yml) spielt neue Migrationen automatisch auf das verknüpfte Projekt ein.
+- Der GitHub-Actions-Workflow [`supabase-migrate.yml`](.github/workflows/supabase-migrate.yml) spielt neue Migrationen automatisch auf das Supabase-Projekt ein.
+- Dafür muss `SUPABASE_DB_URL` als GitHub-Actions-Secret auf die Supavisor-Session-Pooler-Verbindungszeichenfolge des Projekts gesetzt sein (IPv4-kompatibel, Port 5432).
 - Die produktive Autorisierung erfolgt serverseitig über Supabase-RLS, Trigger und Security-Definer-Funktionen; Client-Zustände oder LocalStorage vergeben keine Rechte.
 - Match-RPCs lehnen gesperrte Spieler, unbekannte Profile und doppelte Spieler-IDs in Teams serverseitig ab.
 - Profilanlage, Rollenwechsel, Sperren, Moderation und Turnierwertung laufen über autorisierte RPCs. Direkte Client-Schreibzugriffe können weder Statistikwerte noch Auth-Verknüpfung, Rolle oder Sperrstatus manipulieren.
