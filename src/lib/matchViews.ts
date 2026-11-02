@@ -1,9 +1,12 @@
 import { Match, Player, Tournament } from '@/types';
 import { useStore } from '@/lib/store';
 import { isScoredMatch, qualifiedPlayers } from '@/lib/statistics';
+import { MAX_SCORE } from './elo';
+
+export { daysAgoKey, getMonthStartKey, getWeekStartKey, toDateKey } from './dates';
 
 export const MIN_RANKED_GAMES = 3;
-export const MAX_SCORE = 10;
+export { MAX_SCORE } from './elo';
 export const UNRANKED_BEST_RANK = 999;
 export const MAX_LEVEL = 50;
 export const ADMIN_ROLES = ['owner', 'co_owner', 'admin'] as const;
@@ -88,31 +91,6 @@ export function getLeagueRank(players: Player[], playerId: string): number | nul
 export function formatBestRank(bestRank?: number | null): string {
   if (!bestRank || bestRank <= 0 || bestRank >= UNRANKED_BEST_RANK) return '--';
   return `#${bestRank}`;
-}
-
-export function toDateKey(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-export function getWeekStartKey(now: Date = new Date()): string {
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
-  const day = start.getDay() || 7;
-  start.setDate(start.getDate() - day + 1);
-  return toDateKey(start);
-}
-
-export function getMonthStartKey(now: Date = new Date()): string {
-  return toDateKey(new Date(now.getFullYear(), now.getMonth(), 1));
-}
-
-export function daysAgoKey(days: number, now: Date = new Date()): string {
-  const d = new Date(now);
-  d.setDate(d.getDate() - days);
-  return toDateKey(d);
 }
 
 export interface PeriodStats {

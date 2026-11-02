@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useStore } from '@/lib/store';
 import { MatchMode, Tournament, TournamentMatch, TournamentTeam, TournamentType } from '@/types';
+import { compareTournamentStandings } from '@/lib/tournaments';
 import { Crown, Plus, Trophy, X } from 'lucide-react';
 
 const fieldClass = 'min-h-[44px] w-full min-w-0 rounded-xl border border-emerald-700 bg-emerald-950 p-3 text-base text-white focus:outline-none focus:ring-2 focus:ring-amber-400';
@@ -152,7 +153,7 @@ export function TournamentView() {
     const scored = completed.reduce((sum, match) => sum + (sideId(match, 'A') === team.id ? match.scoreA ?? 0 : match.scoreB ?? 0), 0);
     const conceded = completed.reduce((sum, match) => sum + (sideId(match, 'A') === team.id ? match.scoreB ?? 0 : match.scoreA ?? 0), 0);
     return { team, games: completed.length, wins, scored, conceded, points: wins * 3 };
-  }).sort((a, b) => b.points - a.points || (b.scored - b.conceded) - (a.scored - a.conceded) || b.scored - a.scored);
+  }).sort(compareTournamentStandings);
 
   const updateTeamPlayer = (teamId: string, slot: number, playerId: string) => {
     setDraftTeams((previous) => previous.map((team) => {

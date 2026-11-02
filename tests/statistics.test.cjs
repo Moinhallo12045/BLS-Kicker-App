@@ -2,7 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {loadTypeScript, player} = require('./load-typescript.cjs');
 const {rebuildLocalStatistics, qualifiedPlayers, weeklyQuests} = loadTypeScript('src/lib/statistics.ts');
-const {createLocalTournament, resetLocalTournamentMatch, scoreLocalTournament} = loadTypeScript('src/lib/tournaments.ts');
+const {createLocalTournament, resetLocalTournamentMatch, scoreLocalTournament, compareTournamentStandings} = loadTypeScript('src/lib/tournaments.ts');
+const {getWeekStartKey, getMonthStartKey} = loadTypeScript('src/lib/dates.ts');
 
 function game(id, teamA, teamB, scoreA = 10, scoreB = 5) {
   return {id, teamA, teamB, mode: teamA.length === 1 ? '1v1' : '2v2',
@@ -47,6 +48,39 @@ test('qualified ranking uses server tie ordering regardless of input order', () 
   const newer={...player('a'),createdAt:'2026-02-01T00:00:00Z',wins1v1:3};
   assert.deepEqual(qualifiedPlayers([newer,older]).map((p)=>p.id),['z','a']);
   assert.equal(qualifiedPlayers([player('unqualified')]).length,0);
+});
+test('group winner and displayed standings use points, goal difference, then goals scored', () => {
+  const players = ['a', 'b', 'c'].map((id) => player(id));
+  const teams = players.map((p) => ({id: p.id, playerIds: [p.id]}));
+  let tournaments = [createLocalTournament({name:'Group',description:'',type:'groups',mode:'1v1',teams},players)];
+  let matches = [];
+  for (const fixture of tournaments[0].matches) {
+    const teamA = fixture.teamAId;
+    const teamB = fixture.teamBId;
+    const [a, b] = [teamA, teamB].includes('a') && [teamA, teamB].includes('b')
+      ? teamA === 'a' ? [10, 8] : [8, 10]
+      : [teamA, teamB].includes('a')
+        ? teamA === 'a' ? [4, 5] : [5, 4]
+        : teamA === 'b' ? [7, 4] : [4, 7];
+    const state = scoreLocalTournament(tournaments, matches, tournaments[0].id, fixture.id, a, b, 'a');
+    tournaments = state.tournaments;
+    matches = state.matches;
+  }
+  const tournament = tournaments[0];
+  assert.equal(tournament.winnerTeamId, 'b');
+  const standings = [
+    {team: 'a', points: 3, scored: 14, conceded: 13},
+    {team: 'b', points: 3, scored: 15, conceded: 14},
+    {team: 'c', points: 3, scored: 9, conceded: 11},
+  ].sort(compareTournamentStandings);
+  assert.equal(standings[0].team, tournament.winnerTeamId);
+});
+test('week and month boundaries use UTC like stored match dates', () => {
+  const localMonday = new Date('2026-11-02T00:30:00+01:00');
+  assert.equal(getWeekStartKey(localMonday), '2026-10-26');
+  assert.equal(getMonthStartKey(new Date('2026-11-01T00:30:00+01:00')), '2026-10-01');
+  const match = {...game('01',['a'],['b']), date:'2026-11-01', createdAt:'2026-11-01T23:30:00Z'};
+  assert.equal(weeklyQuests([match], 'a', localMonday)[1].progress, 1);
 });
 test('doubles knockout persists both members and invalidates downstream winners after correction', () => {
   const players = ['a','b','c','d','e','f','g','h'].map((id) => player(id));
@@ -105,4 +139,10 @@ test('legacy doubles without saved pairs cannot create singleton league games', 
   const legacy = {id:'legacy',name:'Old',mode:'2v2',type:'ko',status:'running',
     participants:['a','b'],matches:[{id:'final',round:1,playerAId:'a',playerBId:'b'}]};
   assert.throws(()=>scoreLocalTournament([legacy],[],'legacy','final',10,5,'a'),/festen Paare/);
+});
+test('local tournament results enforce the same ten-goal ceiling as the UI', () => {
+  const players = ['a', 'b'].map((id) => player(id));
+  const tournament = createLocalTournament({name:'League',description:'',type:'round_robin',mode:'1v1',
+    teams:players.map((p) => ({id:p.id,playerIds:[p.id]}))},players);
+  assert.throws(() => scoreLocalTournament([tournament],[],tournament.id,tournament.matches[0].id,11,5,'a'),/0 und 10/);
 });

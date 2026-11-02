@@ -1,4 +1,14 @@
 import type { Match, MatchMode, Player, Tournament, TournamentMatch, TournamentTeam } from '@/types';
+import { MAX_SCORE } from './elo';
+
+export function compareTournamentStandings(
+  a: { points: number; scored: number; conceded: number },
+  b: { points: number; scored: number; conceded: number },
+): number {
+  return b.points - a.points
+    || (b.scored - b.conceded) - (a.scored - a.conceded)
+    || b.scored - a.scored;
+}
 
 export function createLocalTournament(
   params: {name: string; description: string; type: Tournament['type']; mode: MatchMode; teams: TournamentTeam[]},
@@ -81,8 +91,9 @@ export function resetLocalTournamentMatch(tournaments: Tournament[], leagueMatch
 
 export function scoreLocalTournament(tournaments: Tournament[], leagueMatches: Match[], tournamentId: string,
   fixtureId: string, scoreA: number, scoreB: number, creatorId: string) {
-  if (!Number.isInteger(scoreA) || !Number.isInteger(scoreB) || scoreA < 0 || scoreB < 0 || scoreA === scoreB) {
-    throw new Error('Bitte unterschiedliche, nicht negative ganze Torzahlen eingeben.');
+  if (!Number.isInteger(scoreA) || !Number.isInteger(scoreB) || scoreA < 0 || scoreB < 0
+    || scoreA > MAX_SCORE || scoreB > MAX_SCORE || scoreA === scoreB) {
+    throw new Error(`Bitte unterschiedliche ganze Torzahlen zwischen 0 und ${MAX_SCORE} eingeben.`);
   }
   const source = tournaments.find((t) => t.id === tournamentId);
   if (!source) throw new Error('Turnier nicht gefunden.');
@@ -127,10 +138,20 @@ export function scoreLocalTournament(tournaments: Tournament[], leagueMatches: M
     if (source.type === 'ko') winnerTeamId = fixtures.find((m) => m.round === Math.log2(teams.length))?.winnerTeamId ?? undefined;
     else {
       const points = (id: string) => fixtures.filter((m) => m.winnerTeamId === id).length * 3;
-      const goalDifference = (id: string) => fixtures.reduce((sum, m) =>
-        sum + (m.teamAId === id ? (m.scoreA || 0) - (m.scoreB || 0) : m.teamBId === id ? (m.scoreB || 0) - (m.scoreA || 0) : 0), 0);
-      winnerTeamId = [...teams].sort((a, b) => points(b.id) - points(a.id)
-        || goalDifference(b.id) - goalDifference(a.id) || a.id.localeCompare(b.id))[0].id;
+      const goals = (id: string) => fixtures.reduce((totals, match) => {
+        if (match.teamAId === id) {
+          totals.scored += match.scoreA || 0;
+          totals.conceded += match.scoreB || 0;
+        } else if (match.teamBId === id) {
+          totals.scored += match.scoreB || 0;
+          totals.conceded += match.scoreA || 0;
+        }
+        return totals;
+      }, {scored: 0, conceded: 0});
+      winnerTeamId = [...teams].sort((a, b) => compareTournamentStandings(
+        {points: points(a.id), ...goals(a.id)},
+        {points: points(b.id), ...goals(b.id)},
+      ))[0].id;
     }
   }
   const nextTournament = {...source, teams, matches: fixtures, status: complete ? 'completed' as const : 'running' as const,

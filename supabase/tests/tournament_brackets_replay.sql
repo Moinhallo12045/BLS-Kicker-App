@@ -57,15 +57,15 @@ SELECT (public.create_tournament('Group','','groups','1v1',
  '[{"id":"a","playerIds":["00000000-0000-0000-0000-000000000001"]},
  {"id":"b","playerIds":["00000000-0000-0000-0000-000000000002"]},
  {"id":"c","playerIds":["00000000-0000-0000-0000-000000000003"]}]')).id;
-SELECT public.score_tournament_match(tid,t.matches->0->>'id',10,4)
+SELECT public.score_tournament_match(tid,t.matches->0->>'id',10,8)
 FROM public.test_tournament_state s JOIN public.tournaments t ON t.id=s.tid;
-SELECT public.score_tournament_match(tid,t.matches->1->>'id',10,4)
+SELECT public.score_tournament_match(tid,t.matches->1->>'id',4,5)
 FROM public.test_tournament_state s JOIN public.tournaments t ON t.id=s.tid;
-SELECT public.score_tournament_match(tid,t.matches->2->>'id',10,4)
+SELECT public.score_tournament_match(tid,t.matches->2->>'id',7,4)
 FROM public.test_tournament_state s JOIN public.tournaments t ON t.id=s.tid;
 RESET ROLE;
-SELECT public.test_assert(status='completed' AND winner_team_id='a' AND jsonb_array_length(matches)=3,
-  'full group round-robin schedule and winner') FROM public.tournaments WHERE type='groups';
+SELECT public.test_assert(status='completed' AND winner_team_id='b' AND jsonb_array_length(matches)=3,
+  'group winner breaks points and goal-difference ties by goals scored') FROM public.tournaments WHERE type='groups';
 ROLLBACK;
 
 BEGIN;
@@ -94,6 +94,8 @@ INSERT INTO public.test_tournament_state(mid)
 SELECT (public.submit_match_result('1v1',ARRAY['00000000-0000-0000-0000-000000000001']::UUID[],
   ARRAY['00000000-0000-0000-0000-000000000002']::UUID[],10,5)).id::TEXT;
 SELECT public.propose_dispute_resolution(mid::UUID,4,10,'score wrong') FROM public.test_tournament_state WHERE mid IS NOT NULL;
+SELECT public.test_denied(format('SELECT public.propose_dispute_resolution(%L,11,5,%L)',mid,'invalid score'))
+FROM public.test_tournament_state WHERE mid IS NOT NULL;
 SELECT public.test_denied(format('SELECT public.accept_match_proposal(%L)',mid)) FROM public.test_tournament_state WHERE mid IS NOT NULL;
 RESET ROLE;
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',true);
@@ -113,6 +115,8 @@ SELECT public.dispute_match(mid::UUID,'admin review') FROM public.test_tournamen
 RESET ROLE;
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000010',true);
 SET LOCAL ROLE authenticated;
+SELECT public.test_denied(format('SELECT public.admin_resolve_dispute(%L,%L,11,5)',mid,'correct'))
+FROM public.test_tournament_state WHERE mid IS NOT NULL;
 SELECT public.admin_resolve_dispute(mid::UUID,'confirm',NULL,NULL) FROM public.test_tournament_state WHERE mid IS NOT NULL;
 RESET ROLE;
 CREATE TABLE public.test_before_replay AS SELECT id,elo_1v1,elo_2v2,elo_total,league_points,

@@ -7,6 +7,7 @@
 \ir ../migrations/20261101222000_linear_scoring_replay.sql
 \ir ../migrations/20261101223000_in_memory_replay.sql
 \ir ../migrations/20261101224000_application_rpc_aliases.sql
+\ir ../migrations/20261101225000_logic_consistency.sql
 
 CREATE FUNCTION public.test_assert(ok BOOLEAN,message TEXT) RETURNS VOID LANGUAGE plpgsql AS $$
 BEGIN IF ok IS DISTINCT FROM TRUE THEN RAISE EXCEPTION 'Assertion failed: %',message; END IF; END;
@@ -44,6 +45,9 @@ SELECT public.test_assert((public.get_my_profile()).email LIKE 'private-%','own 
 SELECT public.set_player_suspension('00000000-0000-0000-0000-000000000008',true);
 SELECT public.test_denied($q$SELECT public.set_player_suspension('00000000-0000-0000-0000-000000000009',true)$q$);
 SELECT public.create_invite_code(' mobile-2026 ',5);
+SELECT public.test_denied($q$SELECT public.submit_match_result('1v1',
+ ARRAY['00000000-0000-0000-0000-000000000010']::UUID[],
+ ARRAY['00000000-0000-0000-0000-000000000001']::UUID[],11,5)$q$);
 SELECT public.test_denied($q$SELECT public.create_invite_code('mobile-2026',5)$q$);
 SELECT public.test_denied($q$SELECT public.create_invite_code(NULL,NULL)$q$);
 RESET ROLE;
@@ -79,6 +83,8 @@ SELECT (public.create_tournament('Doubles','Fixed pairs','ko','2v2',(
    jsonb_build_array('00000000-0000-0000-0000-'||lpad((n*2-1)::TEXT,12,'0'),
      '00000000-0000-0000-0000-'||lpad((n*2)::TEXT,12,'0')))) FROM generate_series(1,2)n
 ))).id;
+SELECT public.test_denied(format('SELECT public.score_tournament_match(%L,%L,11,4)',tid,t.matches->0->>'id'))
+FROM public.test_tournament_state s JOIN public.tournaments t ON t.id=s.tid;
 SELECT public.score_tournament_match(tid,(t.matches->0->>'id'),10,4)
 FROM public.test_tournament_state s JOIN public.tournaments t ON t.id=s.tid;
 SELECT public.score_tournament_match(tid,(t.matches->0->>'id'),10,4)

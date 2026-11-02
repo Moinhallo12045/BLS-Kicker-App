@@ -17,6 +17,7 @@ SELECT set_config('app.server_operation','',false);
 \ir ../migrations/20261101222000_linear_scoring_replay.sql
 \ir ../migrations/20261101223000_in_memory_replay.sql
 \ir ../migrations/20261101224000_application_rpc_aliases.sql
+\ir ../migrations/20261101225000_logic_consistency.sql
 DO $$
 DECLARE p public.profiles;
 BEGIN
