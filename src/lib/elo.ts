@@ -1,5 +1,6 @@
 export const DEFAULT_ELO = 1000;
 export const K_FACTOR = 32;
+export const MAX_SCORE = 10;
 
 /**
  * Calculates the expected score for Team A vs Team B.

@@ -5,6 +5,7 @@ import type { Player, PlayerRole, Match, Tournament, TournamentTeam, WeeklyQuest
 import { supabase } from './supabaseClient';
 import { rebuildLocalStatistics, weeklyQuests } from './statistics';
 import { createLocalTournament, resetLocalTournamentMatch, scoreLocalTournament } from './tournaments';
+import { MAX_SCORE } from './elo';
 import type { Session } from '@supabase/supabase-js';
 
 export interface ActionResult { success: boolean; message: string }
@@ -16,6 +17,9 @@ interface ProfileRow {
   wins_2v2: number; losses_2v2: number; current_streak: number; best_rank: number;
   role: PlayerRole; is_suspended: boolean; badges: string[]; elo_history: Player['eloHistory'];
 }
+type ProfileLookup = ProfileRow | {id: null} | null;
+// A scalar composite RPC can return an object with null fields when no row exists.
+const isExistingProfile = (profile: ProfileLookup): profile is ProfileRow => Boolean(profile?.id);
 interface MatchRow {
   id: string; mode: MatchMode; creator_id: string; team_a: string[]; team_b: string[];
   score_a: number; score_b: number; status: Match['status']; confirmed_by: string[];
@@ -138,8 +142,9 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
     const version = versionRef.current;
     const load = async () => {
       try {
-        const { data: own, error: ownError } = await client.rpc('get_my_profile').maybeSingle().returns<ProfileRow>();
+        const { data: ownData, error: ownError } = await client.rpc('get_my_profile').maybeSingle().returns<ProfileLookup>();
         if (ownError) throw new Error(ownError.message);
+        const own = isExistingProfile(ownData) ? ownData : null;
         const [profiles, remoteMatches, remoteTournaments] = await Promise.all([
           readPages((start, end) => client.from('profiles').select(PROFILE_COLUMNS)
             .order('created_at').order('id').range(start, end).returns<ProfileRow[]>()),
@@ -291,7 +296,8 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
       return failure(errorMessage(error));
     } finally { mutationRef.current = false; }
   };
-  const validScore = (a: number, b: number) => Number.isInteger(a) && Number.isInteger(b) && a >= 0 && b >= 0 && a !== b;
+  const validScore = (a: number, b: number) => Number.isInteger(a) && Number.isInteger(b)
+    && a >= 0 && b >= 0 && a <= MAX_SCORE && b <= MAX_SCORE && a !== b;
   const localMatch = (id: string) => stateRef.current.matches.find((m) => m.id === id);
   const isParticipant = (m: Match) => Boolean(currentUser && [...m.teamA, ...m.teamB].includes(currentUser.id));
   const patchLocal = (id: string, patch: Partial<Match>, message: string) => {
@@ -312,7 +318,7 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
 
   const submitMatch: StoreContextType['submitMatch'] = async ({mode, teamA, teamB, scoreA, scoreB}) => {
     if (!currentUser) return {...failure('Nicht angemeldet.'), matchId: ''};
-    if (!validScore(scoreA, scoreB)) return {...failure('Bitte unterschiedliche, nicht negative ganze Torzahlen eingeben.'), matchId: ''};
+    if (!validScore(scoreA, scoreB)) return {...failure(`Bitte unterschiedliche ganze Torzahlen zwischen 0 und ${MAX_SCORE} eingeben.`), matchId: ''};
     const size = mode === '1v1' ? 1 : 2;
     if (teamA.length !== size || teamB.length !== size || new Set([...teamA, ...teamB]).size !== size * 2
       || ![...teamA, ...teamB].includes(currentUser.id)
@@ -409,8 +415,9 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
     const {data, error} = await supabase.auth.verifyOtp({email: email.trim().toLowerCase(), token: code.trim(), type: 'email'});
     if (error) return failure('Ungültiger oder abgelaufener Code.');
     sessionRef.current = data.session; versionRef.current++;
-    const {data: own, error: ownError} = await supabase.rpc('get_my_profile').maybeSingle().returns<ProfileRow>();
+    const {data: ownData, error: ownError} = await supabase.rpc('get_my_profile').maybeSingle().returns<ProfileLookup>();
     if (ownError) return failure(ownError.message);
+    const own = isExistingProfile(ownData) ? ownData : null;
     if (own?.is_suspended) return failure('Dein Spielerprofil ist gesperrt.');
     await refreshState();
     return {...success(own ? 'Erfolgreich angemeldet.' : 'Bitte erstelle dein Spielerprofil.'), isExistingPlayer: Boolean(own)};

@@ -1,6 +1,7 @@
 import type { Match, Player, Tournament, WeeklyQuest } from '@/types';
 import { calculateEloChange, getAverageElo } from './elo';
 import { getXpForNextLevel, MATCH_XP } from './levels';
+import { toDateKey } from './dates';
 
 const MATCH_BADGES = new Set([
   'stammgast_1', 'siegertyp_1', 'revanche', 'eingespielt_1',
@@ -120,7 +121,7 @@ export function weeklyQuests(matches: Match[], playerId?: string, now = new Date
   weekStart.setUTCDate(weekStart.getUTCDate() - ((weekStart.getUTCDay() + 6) % 7));
   const games = matches.filter((m) => playerId && isScoredMatch(m)
     && [...m.teamA, ...m.teamB].includes(playerId)
-    && m.date >= weekStart.toISOString().slice(0, 10) && m.date <= now.toISOString().slice(0, 10))
+    && m.date >= toDateKey(weekStart) && m.date <= toDateKey(now))
     .sort((a, b) => (a.createdAt || a.date).localeCompare(b.createdAt || b.date) || a.id.localeCompare(b.id));
   const opponents = new Set<string>();
   let streak = 0;

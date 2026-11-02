@@ -45,6 +45,14 @@ test('offline mutual cancellation requires opponent and rebuilds final statistic
   api=h.render();assert.equal(api.players[0].wins1v1,0);assert.equal(api.players[0].xp,0);
   assert.equal(api.matches[0].status,'cancelled');
 });
+test('offline match submission rejects scores above the UI limit', async()=>{
+  const h=harness(null,{players:[player('a'),player('b')],matches:[],tournaments:[],currentUserId:'a'});
+  await h.hydrate();
+  const result=await h.render().submitMatch({mode:'1v1',teamA:['a'],teamB:['b'],scoreA:11,scoreB:5});
+  assert.equal(result.success,false);
+  assert.match(result.message,/0 und 10/);
+  assert.equal(h.render().matches.length,0);
+});
 test('connected state paginates public profiles without private identity columns',async()=>{
   const data=Array.from({length:1001},(_,i)=>row(player(`p${i}`)));
   let pages=0;
@@ -65,6 +73,45 @@ test('connected state paginates public profiles without private identity columns
   };
   const h=harness(client);await h.hydrate();
   assert.equal(h.render().players.length,1001);assert.equal(pages,5);assert.equal(h.render().currentUser.id,'p0');
+});
+test('new authenticated users without a profile do not become null-name players',async()=>{
+  const existing=row(player('existing'));
+  const session={user:{id:'new',email:'new@example.com'}};
+  for(const missing of [null,Object.fromEntries(Object.keys(existing).map(key=>[key,null]))]){
+    const client={
+      auth:{
+        getSession:async()=>({data:{session},error:null}),
+        verifyOtp:async()=>({data:{session},error:null}),
+        onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}}),
+      },
+      rpc:(name)=>{
+        if(name==='create_player_profile'){
+          own=row(player('new'));
+          return builder({data:own,error:null});
+        }
+        return builder({data:own,error:null});
+      },
+      from:(table)=>builder({data:table==='profiles'?[existing]:[],error:null}),
+    };
+    let own=missing;
+    const h=harness(client);await h.hydrate();
+    assert.equal(h.render().currentUser,null);
+    assert.equal(h.render().players.length,1);
+    assert.equal(h.render().players[0].name.toLowerCase(),existing.name.toLowerCase());
+    assert.equal(h.render().syncError,null);
+    const result=await h.render().verifyCode(session.user.email,'123456');
+    assert.equal(result.success,true);
+    assert.equal(result.isExistingPlayer,false);
+    assert.match(result.message,/erstelle dein Spielerprofil/);
+    assert.equal(h.render().players.length,1);
+    assert.equal(h.render().currentUser,null);
+    const created=await h.render().completeProfileCreation({
+      email:session.user.email,name:'new',avatar:'x',yearJoined:2026,
+    });
+    assert.equal(created.success,true);
+    assert.equal(h.render().currentUser.id,'new');
+    assert.equal(h.render().players.length,2);
+  }
 });
 test('server mutation failures are returned and do not fabricate local tournaments',async()=>{
   const p=row(player('admin','admin'));
