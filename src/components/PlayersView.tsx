@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useStore } from '@/lib/store';
+import { ExternalLabel } from './ExternalLabel';
 import { Search, Swords, Trophy, X } from 'lucide-react';
 import { getTierForLevel } from '@/lib/levels';
 import { didPlayerWin, gamesPlayed, isMatchCounted, isOpposingSide } from '@/lib/matchViews';
@@ -114,7 +115,7 @@ export function PlayersView() {
                     )}
                   </div>
                   <div className="text-[11px] text-emerald-400/70 truncate">
-                    {tier.tier} • Uni-Jg. {p.yearJoined}
+                    {tier.tier} • {p.isExternal ? <ExternalLabel /> : `Uni-Jg. ${p.yearJoined}`}
                   </div>
                 </div>
               </div>

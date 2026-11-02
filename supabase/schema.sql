@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     avatar TEXT DEFAULT '⚽',
     email TEXT,
     year_joined INT DEFAULT EXTRACT(YEAR FROM CURRENT_DATE),
+    is_external BOOLEAN NOT NULL DEFAULT FALSE,
     level INT DEFAULT 1,
     xp INT DEFAULT 0,
     xp_next_level INT DEFAULT 150,
@@ -154,10 +155,13 @@ BEGIN
   IF p_name IS NULL OR length(trim(p_name)) = 0 OR length(trim(p_name)) > 80 THEN
     RAISE EXCEPTION 'Invalid player name';
   END IF;
-  IF p_year_joined IS NULL
-     OR p_year_joined < 2000
-     OR p_year_joined > EXTRACT(YEAR FROM CURRENT_DATE)::INT THEN
-    RAISE EXCEPTION 'Invalid university year';
+  IF (actor_email NOT LIKE '%@law-school.de' AND p_year_joined IS NOT NULL)
+     OR (actor_email LIKE '%@law-school.de' AND (
+       p_year_joined IS NULL
+       OR p_year_joined < 2000
+       OR p_year_joined > EXTRACT(YEAR FROM CURRENT_DATE)::INT
+     )) THEN
+    RAISE EXCEPTION 'Invalid player details';
   END IF;
   IF NOT EXISTS (
     SELECT 1 FROM public.whitelist
@@ -172,11 +176,11 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'Player name or email is already in use';
   END IF;
-  INSERT INTO public.profiles (id, auth_user_id, name, avatar, email, year_joined, role)
+  INSERT INTO public.profiles (id, auth_user_id, name, avatar, email, year_joined, is_external, role)
   VALUES (
     auth.uid(), auth.uid(), trim(p_name),
     coalesce(nullif(trim(p_avatar), ''), '⚽'),
-    actor_email, p_year_joined, 'player'
+    actor_email, p_year_joined, actor_email NOT LIKE '%@law-school.de', 'player'
   )
   RETURNING * INTO created_profile;
   RETURN created_profile;
@@ -323,6 +327,12 @@ BEGIN
        OR NEW.auth_user_id IS DISTINCT FROM auth.uid()
        OR NEW.role <> 'player'
        OR lower(coalesce(NEW.email, '')) <> lower(coalesce(auth.jwt() ->> 'email', ''))
+       OR NEW.is_external IS DISTINCT FROM (lower(NEW.email) NOT LIKE '%@law-school.de')
+       OR (NEW.is_external AND NEW.year_joined IS NOT NULL)
+       OR (NOT NEW.is_external AND (
+         NEW.year_joined IS NULL
+         OR NEW.year_joined NOT BETWEEN 2000 AND EXTRACT(YEAR FROM CURRENT_DATE)::INT
+       ))
        OR NEW.level <> 1
        OR NEW.xp <> 0
        OR NEW.xp_next_level <> 150
@@ -344,6 +354,15 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  IF NEW.is_external IS DISTINCT FROM (lower(NEW.email) NOT LIKE '%@law-school.de')
+     OR (NEW.is_external AND NEW.year_joined IS NOT NULL)
+     OR (NOT NEW.is_external AND (
+       NEW.year_joined IS NULL
+       OR NEW.year_joined NOT BETWEEN 2000 AND EXTRACT(YEAR FROM CURRENT_DATE)::INT
+     )) THEN
+    RAISE EXCEPTION 'Invalid player details';
+  END IF;
+
   IF NOT public.is_owner() THEN
     IF EXISTS (
       SELECT 1
@@ -360,6 +379,7 @@ BEGIN
     END IF;
     IF NEW.auth_user_id IS DISTINCT FROM OLD.auth_user_id
        OR NEW.email IS DISTINCT FROM OLD.email
+       OR NEW.is_external IS DISTINCT FROM OLD.is_external
        OR NEW.xp IS DISTINCT FROM OLD.xp
        OR NEW.xp_next_level IS DISTINCT FROM OLD.xp_next_level
        OR NEW.elo_1v1 IS DISTINCT FROM OLD.elo_1v1

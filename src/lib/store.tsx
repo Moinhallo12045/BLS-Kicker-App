@@ -10,7 +10,8 @@ import type { Session } from '@supabase/supabase-js';
 
 export interface ActionResult { success: boolean; message: string }
 interface ProfileRow {
-  id: string; name: string; avatar: string; email?: string; year_joined: number;
+  id: string; name: string; avatar: string; email?: string; year_joined: number | null;
+  is_external: boolean;
   created_at?: string;
   level: number; xp: number; xp_next_level: number; elo_1v1: number; elo_2v2: number;
   elo_total: number; league_points: number; wins_1v1: number; losses_1v1: number;
@@ -64,7 +65,7 @@ interface StoreContextType {
   setPlayerSuspension: (playerId: string, suspended: boolean) => Promise<ActionResult>;
   checkWhitelistAndSendCode: (email: string) => Promise<ActionResult & {isExistingPlayer?: boolean}>;
   verifyCode: (email: string, code: string) => Promise<ActionResult & {isExistingPlayer?: boolean}>;
-  completeProfileCreation: (params: {email: string; name: string; avatar: string; yearJoined: number}) => Promise<ActionResult>;
+  completeProfileCreation: (params: {email: string; name: string; avatar: string; yearJoined: number | null}) => Promise<ActionResult>;
   addWhitelistEntry: (pattern: string) => Promise<ActionResult>;
   removeWhitelistEntry: (id: string) => Promise<ActionResult>;
   createInviteCode: (code: string, maxUses: number) => Promise<ActionResult>;
@@ -74,14 +75,14 @@ interface StoreContextType {
 }
 const StoreContext = createContext<StoreContextType | null>(null);
 const STORAGE_KEY = 'bls_kicker_app_state_v5';
-const PROFILE_COLUMNS = 'id,name,avatar,year_joined,level,xp,xp_next_level,elo_1v1,elo_2v2,elo_total,league_points,wins_1v1,losses_1v1,wins_2v2,losses_2v2,current_streak,best_rank,role,is_suspended,badges,elo_history,created_at,updated_at';
+const PROFILE_COLUMNS = 'id,name,avatar,year_joined,is_external,level,xp,xp_next_level,elo_1v1,elo_2v2,elo_total,league_points,wins_1v1,losses_1v1,wins_2v2,losses_2v2,current_streak,best_rank,role,is_suspended,badges,elo_history,created_at,updated_at';
 const failure = (message: string): ActionResult => ({ success: false, message });
 const success = (message: string): ActionResult => ({ success: true, message });
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Die Anfrage ist fehlgeschlagen.';
 const profileToPlayer = (p: ProfileRow): Player => ({
   id: p.id, name: p.name, avatar: p.avatar || '⚽', email: p.email || '',
   createdAt: p.created_at,
-  yearJoined: p.year_joined, level: p.level, xp: p.xp, xpNextLevel: p.xp_next_level,
+  yearJoined: p.year_joined, isExternal: Boolean(p.is_external), level: p.level, xp: p.xp, xpNextLevel: p.xp_next_level,
   elo1v1: p.elo_1v1, elo2v2: p.elo_2v2, eloTotal: p.elo_total,
   leaguePoints: p.league_points, wins1v1: p.wins_1v1, losses1v1: p.losses_1v1,
   wins2v2: p.wins_2v2, losses2v2: p.losses_2v2, currentStreak: p.current_streak,

@@ -45,6 +45,7 @@ Eine moderne, hochwertige und mobiloptimierte Web-App (PWA) für geschlossene Ti
 
 6. **Geschlossenes Registrierungs- & Rechtesystem**:
    - Registrierung nur für E-Mail-Adressen oder Domains auf der serverseitigen Whitelist.
+   - Die bestätigte E-Mail-Adresse bestimmt den Status: `@law-school.de` gilt als Uni-Mail; andere freigeschaltete Adressen erhalten das **Extern**-Label und benötigen keinen Uni-Jahrgang.
    - Rollensystem: **Owner**, **Co-Owner**, **Admin**, **Organiser**, **Player**.
    - **Owner**: vollständige Verwaltung und Ernennung von Co-Ownern, Admins, Organisern und Playern.
    - **Co-Owner**: Server-Admin-Rechte für andere Accounts und Verwaltungsdaten, aber keine Bearbeitung der eigenen Rolle, des Owners oder Vergabe der Owner-Rolle.

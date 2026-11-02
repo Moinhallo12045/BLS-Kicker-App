@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { MatchMode, Player } from '@/types';
 import { useStore } from '@/lib/store';
+import { ExternalLabel } from './ExternalLabel';
 import { MAX_SCORE, runAction, validateScore } from '@/lib/matchViews';
 import { X, Search, Check, AlertCircle, Loader2 } from 'lucide-react';
 
@@ -374,7 +375,7 @@ export function MatchEntryModal({ isOpen, onClose }: MatchEntryModalProps) {
                       {p.avatar}
                     </div>
                     <div className="text-[11px] font-bold text-white truncate w-full">{p.name}</div>
-                    <div className="text-[9px] text-emerald-400/70">({p.yearJoined})</div>
+                    <div className="text-[9px] text-emerald-400/70">{p.isExternal ? <ExternalLabel /> : `(${p.yearJoined})`}</div>
                   </button>
                 );
               })}

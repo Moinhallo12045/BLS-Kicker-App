@@ -12,6 +12,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
+import { ExternalLabel } from './ExternalLabel';
 import { getTierForLevel } from '@/lib/levels';
 import { ALL_BADGES } from '@/lib/badges';
 import { Player } from '@/types';
@@ -162,7 +163,7 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
                 )}
               </h2>
               <div className="text-xs text-amber-200/80 font-medium">
-                {tier.tier} • Uni-Jahrgang {currentUser.yearJoined}
+                {tier.tier} • {currentUser.isExternal ? <ExternalLabel /> : `Uni-Jahrgang ${currentUser.yearJoined}`}
               </div>
             </div>
           </div>

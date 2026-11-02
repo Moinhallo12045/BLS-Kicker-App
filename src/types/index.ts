@@ -6,7 +6,8 @@ export interface Player {
   name: string;
   avatar: string;
   email: string;
-  yearJoined: number;
+  yearJoined: number | null;
+  isExternal?: boolean;
   level: number;
   xp: number;
   xpNextLevel: number;
