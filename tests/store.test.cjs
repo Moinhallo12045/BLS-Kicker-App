@@ -28,6 +28,7 @@ function builder(response) {
 }
 function row(p) {
   return {id:p.id,name:p.name,avatar:p.avatar,email:p.email,year_joined:p.yearJoined,
+    is_external:p.isExternal ?? false,
     level:p.level,xp:p.xp,xp_next_level:p.xpNextLevel,elo_1v1:p.elo1v1,elo_2v2:p.elo2v2,
     elo_total:p.eloTotal,league_points:p.leaguePoints,wins_1v1:p.wins1v1,losses_1v1:p.losses1v1,
     wins_2v2:p.wins2v2,losses_2v2:p.losses2v2,current_streak:p.currentStreak,best_rank:p.bestRank,
@@ -55,6 +56,8 @@ test('offline match submission rejects scores above the UI limit', async()=>{
 });
 test('connected state paginates public profiles without private identity columns',async()=>{
   const data=Array.from({length:1001},(_,i)=>row(player(`p${i}`)));
+  data[0].is_external=true;
+  data[0].year_joined=null;
   let pages=0;
   const client={
     auth:{getSession:async()=>({data:{session:{user:{id:'p0'}}},error:null}),
@@ -62,7 +65,7 @@ test('connected state paginates public profiles without private identity columns
     rpc:()=>builder({data:data[0],error:null}),
     from:(table)=>{
       let start=0,end=249;const query=builder({data:[],error:null});
-      query.select=(columns)=>{if(table==='profiles')assert.ok(!columns.includes('email')&&!columns.includes('auth_user_id'));return query;};
+      query.select=(columns)=>{if(table==='profiles')assert.ok(!columns.includes('email')&&!columns.includes('auth_user_id')&&columns.includes('is_external'));return query;};
       query.range=(a,b)=>{start=a;end=b;return query;};
       query.then=(resolve,reject)=>{
         if(table==='profiles')pages++;
@@ -73,6 +76,7 @@ test('connected state paginates public profiles without private identity columns
   };
   const h=harness(client);await h.hydrate();
   assert.equal(h.render().players.length,1001);assert.equal(pages,5);assert.equal(h.render().currentUser.id,'p0');
+  assert.equal(h.render().currentUser.isExternal,true);assert.equal(h.render().currentUser.yearJoined,null);
 });
 test('new authenticated users without a profile do not become null-name players',async()=>{
   const existing=row(player('existing'));
@@ -84,9 +88,11 @@ test('new authenticated users without a profile do not become null-name players'
         verifyOtp:async()=>({data:{session},error:null}),
         onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}}),
       },
-      rpc:(name)=>{
+      rpc:(name,params)=>{
         if(name==='create_player_profile'){
-          own=row(player('new'));
+          assert.equal(params.p_year_joined,null);
+          assert.equal('p_is_external' in params,false);
+          own=row({...player('new'),isExternal:true,yearJoined:null});
           return builder({data:own,error:null});
         }
         return builder({data:own,error:null});
@@ -106,10 +112,11 @@ test('new authenticated users without a profile do not become null-name players'
     assert.equal(h.render().players.length,1);
     assert.equal(h.render().currentUser,null);
     const created=await h.render().completeProfileCreation({
-      email:session.user.email,name:'new',avatar:'x',yearJoined:2026,
+      email:session.user.email,name:'new',avatar:'x',yearJoined:null,isExternal:true,
     });
     assert.equal(created.success,true);
     assert.equal(h.render().currentUser.id,'new');
+    assert.equal(h.render().currentUser.isExternal,true);
     assert.equal(h.render().players.length,2);
   }
 });

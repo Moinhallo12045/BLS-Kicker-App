@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, Info, X } from 'lucide-react';
 import { useStore } from '@/lib/store';
+import { ExternalLabel } from './ExternalLabel';
 import { Player } from '@/types';
 import {
   MIN_RANKED_GAMES,
@@ -233,7 +234,7 @@ export function RankingView() {
                       )}
                     </div>
                     <div className="text-[11px] text-emerald-400/60 font-medium truncate">
-                      Uni-Jg. {player.yearJoined} • {player.leaguePoints} Ligapunkte
+                      {player.isExternal ? <ExternalLabel /> : `Uni-Jg. ${player.yearJoined}`} • {player.leaguePoints} Ligapunkte
                     </div>
                   </div>
                 </div>
@@ -281,7 +282,7 @@ export function RankingView() {
                           {np.level}
                         </span>
                       </div>
-                      <div className="text-[10px] text-emerald-400/60">Uni-Jg. {np.yearJoined}</div>
+                      <div className="text-[10px] text-emerald-400/60">{np.isExternal ? <ExternalLabel /> : `Uni-Jg. ${np.yearJoined}`}</div>
                     </div>
                   </div>
                   <span className="text-xs text-emerald-300/80 font-medium shrink-0">

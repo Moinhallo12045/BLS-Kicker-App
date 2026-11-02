@@ -44,6 +44,7 @@ export function AuthLandingView() {
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState('⚽');
   const [yearJoined, setYearJoined] = useState('');
+  const isExternal = !email.trim().toLowerCase().endsWith('@law-school.de');
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -197,7 +198,12 @@ export function AuthLandingView() {
     setIsLoading(true);
 
     const res = await runAction(
-      () => completeProfileCreation({ email, name: name.trim(), avatar, yearJoined: Number(yearJoined) }),
+      () => completeProfileCreation({
+        email,
+        name: name.trim(),
+        avatar,
+        yearJoined: isExternal ? null : Number(yearJoined),
+      }),
       { fallbackError: 'Profil konnte nicht erstellt werden.' }
     );
     if (!mountedRef.current) return;
@@ -480,11 +486,16 @@ export function AuthLandingView() {
                 Profil einrichten
               </h3>
               <p className="text-xs text-emerald-300/80 mt-0.5">
-                Wähle deinen Spielernamen, Uni-Jahrgang und dein Liga-Icon
+                Wähle deinen Spielernamen und dein Liga-Icon
+              </p>
+              <p className="text-[11px] text-emerald-400/80 mt-1">
+                {isExternal
+                  ? 'Deine E-Mail-Adresse wird als extern erkannt.'
+                  : 'Deine Uni-Mail bestätigt deinen Uni-Status.'}
               </p>
             </div>
 
-            <div>
+            {!isExternal && <div>
               <label className="block text-xs font-bold text-emerald-200 mb-1">
                 Dein Uni-Jahrgang
               </label>
@@ -500,7 +511,7 @@ export function AuthLandingView() {
                   return <option key={year} value={year}>{year}</option>;
                 })}
               </select>
-            </div>
+            </div>}
 
             <div>
               <label className="block text-xs font-bold text-emerald-200 mb-1">

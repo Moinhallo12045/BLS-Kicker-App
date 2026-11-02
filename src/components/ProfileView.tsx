@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useStore } from '@/lib/store';
+import { ExternalLabel } from './ExternalLabel';
 import { ALL_BADGES } from '@/lib/badges';
 import { getTierForLevel } from '@/lib/levels';
 import { Award, Flame, RefreshCw, LogOut, Loader2 } from 'lucide-react';
@@ -77,7 +78,7 @@ export function ProfileView() {
             </div>
 
             <p className="text-xs text-emerald-300/80 mt-0.5">
-              {tier.tier} • Uni-Jahrgang {currentUser.yearJoined} • ID: #{currentUser.id.slice(-6)}
+              {tier.tier} • {currentUser.isExternal ? <ExternalLabel /> : `Uni-Jahrgang ${currentUser.yearJoined}`} • ID: #{currentUser.id.slice(-6)}
             </p>
 
             <div className="mt-3 flex items-center justify-center sm:justify-start gap-2 flex-wrap">
