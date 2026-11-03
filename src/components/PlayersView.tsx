@@ -1,46 +1,31 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useStore } from '@/lib/store';
 import { ExternalLabel } from './ExternalLabel';
-import { Search, Swords, Trophy, X } from 'lucide-react';
+import { Search, Swords, Trophy } from 'lucide-react';
 import { getTierForLevel } from '@/lib/levels';
 import { didPlayerWin, gamesPlayed, isMatchCounted, isOpposingSide } from '@/lib/matchViews';
+import { useAppNavigation } from './AppNavigation';
 
-export function PlayersView() {
+export function PlayersView({ comparePlayerId }: { comparePlayerId?: string }) {
   const { players, matches, currentUser } = useStore();
+  const { openPlayer: navigateToPlayer, openMatch, comparisons, setComparison } = useAppNavigation();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [compareId, setCompareId] = useState<string | null>(null);
+  const selectedId = comparePlayerId || null;
+  const compareId = comparePlayerId ? comparisons[comparePlayerId] || (currentUser?.id !== comparePlayerId ? currentUser?.id : null) : null;
 
   // Always resolve from current store state so details never go stale.
   const selectedPlayer = selectedId ? players.find((p) => p.id === selectedId) || null : null;
   const compareCandidates = selectedPlayer ? players.filter((p) => p.id !== selectedPlayer.id) : [];
   const comparePlayer =
-    compareCandidates.find((p) => p.id === compareId) || null;
-
-  useEffect(() => {
-    if (selectedId && !selectedPlayer) setSelectedId(null);
-  }, [selectedId, selectedPlayer]);
-
-  useEffect(() => {
-    if (!selectedId) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSelectedId(null);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [selectedId]);
+    compareCandidates.find((p) => p.id === compareId) || compareCandidates[0] || null;
 
   const query = searchQuery.trim().toLowerCase();
   const filtered = players.filter((p) => p.name.toLowerCase().includes(query));
 
   const openPlayer = (playerId: string) => {
-    setSelectedId(playerId);
-    const others = players.filter((p) => p.id !== playerId);
-    const defaultCompare =
-      currentUser && currentUser.id !== playerId ? currentUser.id : others[0]?.id || null;
-    setCompareId(defaultCompare);
+    navigateToPlayer(playerId);
   };
 
   const h2hMatches =
@@ -52,6 +37,7 @@ export function PlayersView() {
 
   return (
     <div className="space-y-5">
+      {!comparePlayerId && <>
       <div>
         <h2 className="font-display text-2xl font-bold text-white flex items-center gap-2">
           <Trophy className="w-6 h-6 text-amber-400" />
@@ -131,31 +117,17 @@ export function PlayersView() {
         })}
       </div>
 
+      </>}
       {selectedPlayer && (
-        <div
-          className="modal-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="h2h-title"
-          onClick={() => setSelectedId(null)}
-        >
+        <div>
           <div
-            className="modal-panel felt-card max-w-lg p-4 sm:p-5 space-y-4 border border-emerald-500/50 shadow-2xl my-auto"
-            onClick={(e) => e.stopPropagation()}
+            className="felt-card p-4 sm:p-5 space-y-4"
           >
             <div className="flex items-center justify-between gap-2 border-b border-emerald-900/40 pb-2">
               <h3 id="h2h-title" className="font-display text-lg font-bold text-white flex items-center gap-2">
                 <Swords className="w-5 h-5 text-amber-400" />
                 Direkter Vergleich
               </h3>
-              <button
-                type="button"
-                onClick={() => setSelectedId(null)}
-                aria-label="Schließen"
-                className="w-11 h-11 flex items-center justify-center text-stone-400 hover:text-white rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
             </div>
 
             {!comparePlayer ? (
@@ -194,7 +166,7 @@ export function PlayersView() {
                     <span className="text-[11px] text-emerald-200">Gegner wechseln:</span>
                     <select
                       value={comparePlayer.id}
-                      onChange={(e) => setCompareId(e.target.value)}
+                      onChange={(e) => comparePlayerId && setComparison(comparePlayerId, e.target.value)}
                       className="min-h-[44px] bg-emerald-950 border border-emerald-800 rounded-lg px-2 text-xs text-amber-300 font-semibold focus:outline-none"
                     >
                       {compareCandidates.map((p) => (
@@ -217,9 +189,11 @@ export function PlayersView() {
                       {h2hMatches.map((m) => {
                         const won = didPlayerWin(m, selectedPlayer.id);
                         return (
-                          <div
+                          <button
+                            type="button"
+                            onClick={() => openMatch(m.id)}
                             key={m.id}
-                            className="p-2 rounded-lg bg-emerald-950/60 border border-emerald-800/40 flex items-center justify-between text-xs"
+                            className="w-full min-h-[44px] p-2 rounded-lg bg-emerald-950/60 border border-emerald-800/40 flex items-center justify-between text-xs hover:border-amber-400"
                           >
                             <span className="text-emerald-400 text-[10px]">
                               {m.date} ({m.mode}){m.tournamentId ? ' · Turnier' : ''}
@@ -232,7 +206,7 @@ export function PlayersView() {
                                 {won ? `Sieg ${selectedPlayer.name}` : `Sieg ${comparePlayer.name}`}
                               </span>
                             </span>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
@@ -241,13 +215,6 @@ export function PlayersView() {
               </>
             )}
 
-            <button
-              type="button"
-              onClick={() => setSelectedId(null)}
-              className="w-full min-h-[44px] rounded-xl bg-emerald-950 border border-emerald-800 text-emerald-300 hover:text-white font-bold text-xs"
-            >
-              Schließen
-            </button>
           </div>
         </div>
       )}

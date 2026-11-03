@@ -1,7 +1,24 @@
 import type { Match, Player, Tournament, WeeklyQuest } from '@/types';
 import { calculateEloChange, getAverageElo } from './elo';
 import { getXpForNextLevel, MATCH_XP } from './levels';
-import { toDateKey } from './dates';
+import { getWeekStartKey, toDateKey } from './dates';
+
+export function weeklyCrawlers(matches: Match[], now = new Date()) {
+  const start = getWeekStartKey(now);
+  const end = toDateKey(now);
+  const entries = new Map<string, { losses: number; worstScore: number }>();
+  for (const match of matches) {
+    if (!isScoredMatch(match) || match.date < start || match.date > end) continue;
+    const losers = match.scoreA === 0 && match.scoreB > 0 ? match.teamA
+      : match.scoreB === 0 && match.scoreA > 0 ? match.teamB : [];
+    for (const id of losers) {
+      const previous = entries.get(id) || { losses: 0, worstScore: 0 };
+      entries.set(id, { losses: previous.losses + 1, worstScore: Math.max(previous.worstScore, match.scoreA, match.scoreB) });
+    }
+  }
+  return Array.from(entries, ([playerId, stats]) => ({ playerId, ...stats }))
+    .sort((a, b) => b.losses - a.losses || b.worstScore - a.worstScore || a.playerId.localeCompare(b.playerId));
+}
 
 const MATCH_BADGES = new Set([
   'stammgast_1', 'siegertyp_1', 'revanche', 'eingespielt_1',

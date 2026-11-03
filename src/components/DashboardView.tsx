@@ -16,6 +16,8 @@ import { ExternalLabel } from './ExternalLabel';
 import { getTierForLevel } from '@/lib/levels';
 import { ALL_BADGES } from '@/lib/badges';
 import { Player } from '@/types';
+import { weeklyCrawlers as computeWeeklyCrawlers } from '@/lib/statistics';
+import { PlayerLink, useAppNavigation } from './AppNavigation';
 import {
   MAX_LEVEL,
   MIN_RANKED_GAMES,
@@ -23,8 +25,6 @@ import {
   gamesPlayed,
   getLeagueRank,
   getQualifiedByElo,
-  getWeekStartKey,
-  isMatchCounted,
 } from '@/lib/matchViews';
 
 type EloRange = '1w' | '1m' | 'all';
@@ -59,6 +59,7 @@ interface DashboardViewProps {
 }
 
 export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardViewProps) {
+  const { selectTab } = useAppNavigation();
   const { currentUser, players, matches, tournaments, quests } = useStore();
   const [eloRange, setEloRange] = useState<EloRange>('all');
   const gradientId = useId().replace(/:/g, '');
@@ -70,33 +71,7 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
   const myGames = gamesPlayed(currentUser);
   const tier = getTierForLevel(currentUser.level);
   const top5 = qualified.slice(0, 5);
-  const weekStartKey = getWeekStartKey();
-  const weeklyCrawlerMatches = matches
-    .filter((match) => isMatchCounted(match) && match.date >= weekStartKey)
-    .flatMap((match) => {
-      if (match.scoreA === 0 && match.scoreB > 0) {
-        return [{ match, playerIds: match.teamA, winningScore: match.scoreB }];
-      }
-      if (match.scoreB === 0 && match.scoreA > 0) {
-        return [{ match, playerIds: match.teamB, winningScore: match.scoreA }];
-      }
-      return [];
-    })
-    .sort((a, b) => b.winningScore - a.winningScore);
-  const weeklyCrawlers = Array.from(
-    weeklyCrawlerMatches.reduce((entries, { playerIds, winningScore }) => {
-      playerIds.forEach((playerId) => {
-        const entry = entries.get(playerId) || { losses: 0, worstScore: 0 };
-        entries.set(playerId, {
-          losses: entry.losses + 1,
-          worstScore: Math.max(entry.worstScore, winningScore),
-        });
-      });
-      return entries;
-    }, new Map<string, { losses: number; worstScore: number }>())
-  )
-    .map(([playerId, stats]) => ({ playerId, ...stats }))
-    .sort((a, b) => b.losses - a.losses || b.worstScore - a.worstScore);
+  const weeklyCrawlers = computeWeeklyCrawlers(matches);
 
   // XP Progress Percentage
   const isMaxLevel = currentUser.level >= MAX_LEVEL;
@@ -323,7 +298,7 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
           <h3 className="font-display text-lg font-bold text-amber-300 flex items-center gap-2">
             🦀 Krabbler der Woche
           </h3>
-          <span className="text-[11px] text-amber-400/80 font-medium">Rangliste</span>
+          <button type="button" onClick={() => selectTab('ranking', 'krabbler')} className="min-h-[44px] text-[11px] text-amber-400 font-medium hover:underline">Rangliste</button>
         </div>
         {weeklyCrawlers.length === 0 ? (
           <p className="text-xs text-stone-400">Noch niemand musste diese Woche krabbeln.</p>
@@ -334,7 +309,7 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="w-5 text-center text-xs font-black text-amber-400">#{index + 1}</span>
                   <span className="text-xs font-bold text-white">
-                    {players.find((player) => player.id === playerId)?.name || 'Unbekannt'}
+                    <PlayerLink id={playerId}>{players.find((player) => player.id === playerId)?.name || 'Unbekannt'}</PlayerLink>
                   </span>
                 </div>
                 <span className="text-right text-xs font-black text-amber-300">
@@ -495,7 +470,7 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
                 </div>
                 <div>
                   <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                    {p.name}
+                    <PlayerLink id={p.id}>{p.name}</PlayerLink>
                     {p.id === currentUser.id && (
                       <span className="text-[10px] text-amber-400 font-normal">(Du)</span>
                     )}

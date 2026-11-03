@@ -5,6 +5,9 @@ import { ChevronRight, Info, X } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { ExternalLabel } from './ExternalLabel';
 import { Player } from '@/types';
+import { RankingFilter } from '@/lib/navigation';
+import { weeklyCrawlers } from '@/lib/statistics';
+import { PlayerLink, useAppNavigation } from './AppNavigation';
 import {
   MIN_RANKED_GAMES,
   computePeriodStats,
@@ -15,10 +18,9 @@ import {
   isQualified,
 } from '@/lib/matchViews';
 
-type RankingFilter = 'elo' | 'wochen' | 'level' | 'aktiv' | '1v1' | '2v2' | 'monat' | 'turnier' | 'historie';
-
 const TABS: { id: RankingFilter; label: string }[] = [
   { id: 'elo', label: 'Elo' },
+  { id: 'krabbler', label: '🦀 Krabbler' },
   { id: 'wochen', label: 'Wochenzocker' },
   { id: 'level', label: 'Level' },
   { id: 'aktiv', label: 'Aktivität' },
@@ -30,6 +32,7 @@ const TABS: { id: RankingFilter; label: string }[] = [
 ];
 
 const FILTER_HINTS: Partial<Record<RankingFilter, string>> = {
+  krabbler: 'Gewertete Zu-null-Niederlagen seit Montag (UTC), auch ohne Ranglistenqualifikation. Bei Gleichstand zählt die höchste Niederlage.',
   wochen: 'Ligapunkte aus gewerteten Spielen dieser Woche (ab Montag)',
   monat: 'Ligapunkte aus gewerteten Spielen dieses Monats',
   aktiv: 'Gewertete Spiele in diesem Monat',
@@ -54,7 +57,8 @@ function peakElo(player: Player): number {
 
 export function RankingView() {
   const { players, matches, tournaments, currentUser } = useStore();
-  const [activeFilter, setActiveFilter] = useState<RankingFilter>('elo');
+  const { location, selectTab } = useAppNavigation();
+  const activeFilter = location.ranking;
   const [showRulesModal, setShowRulesModal] = useState(false);
 
   const weekStartKey = getWeekStartKey();
@@ -62,6 +66,7 @@ export function RankingView() {
   const weeklyStats = useMemo(() => computePeriodStats(matches, weekStartKey), [matches, weekStartKey]);
   const monthlyStats = useMemo(() => computePeriodStats(matches, monthStartKey), [matches, monthStartKey]);
   const tournamentWins = useMemo(() => computeTournamentWins(tournaments), [tournaments]);
+  const crawlers = weeklyCrawlers(matches);
 
   useEffect(() => {
     if (!showRulesModal) return;
@@ -79,6 +84,8 @@ export function RankingView() {
     switch (activeFilter) {
       case '1v1':
         return { value: player.elo1v1, unit: 'ELO' };
+      case 'krabbler':
+        return { value: crawlers.find((entry) => entry.playerId === player.id)?.losses || 0, unit: '× zu null' };
       case '2v2':
         return { value: player.elo2v2, unit: 'ELO' };
       case 'level':
@@ -127,12 +134,19 @@ export function RankingView() {
     }
   };
 
-  const sortedPlayers = qualified
+  const sortedPlayers = activeFilter === 'krabbler'
+    ? crawlers.flatMap((entry) => {
+      const player = players.find((p) => p.id === entry.playerId);
+      return player ? [player] : [];
+    })
+    : qualified
     .filter(periodFilter)
     .sort((a, b) => statFor(b).value - statFor(a).value || tieBreak(a, b));
 
   const emptyMessage =
-    qualified.length === 0
+    activeFilter === 'krabbler'
+      ? 'Noch niemand musste diese Woche krabbeln.'
+      : qualified.length === 0
       ? `Noch niemand ist qualifiziert. In die Rangliste kommst du ab ${MIN_RANKED_GAMES} gewerteten Spielen.`
       : activeFilter === 'wochen'
       ? 'Diese Woche wurden noch keine gewerteten Spiele von qualifizierten Spielern eingetragen.'
@@ -168,7 +182,7 @@ export function RankingView() {
           <button
             key={tab.id}
             type="button"
-            onClick={() => setActiveFilter(tab.id)}
+            onClick={() => selectTab('ranking', tab.id)}
             aria-pressed={activeFilter === tab.id}
             className={`min-h-[44px] px-3.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0 transition-all shadow-sm ${
               activeFilter === tab.id
@@ -220,7 +234,7 @@ export function RankingView() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-bold text-white text-sm tracking-wide truncate max-w-[9rem] sm:max-w-none">
-                        {player.name}
+                        <PlayerLink id={player.id}>{player.name}</PlayerLink>
                       </span>
                       <span className="px-1.5 rounded-full bg-emerald-950 border border-emerald-700/60 text-[10px] text-emerald-300 font-bold">
                         {player.level}
@@ -251,6 +265,7 @@ export function RankingView() {
                   <div className="font-mono text-base font-black text-white tracking-tight">
                     <span>{value}</span>
                     <span className="text-[9px] text-emerald-400/60 ml-0.5">{unit}</span>
+                    {activeFilter === 'krabbler' && <div className="text-[10px] text-amber-300">Höchste Niederlage: 0:{crawlers.find((entry) => entry.playerId === player.id)?.worstScore}</div>}
                   </div>
                 </div>
               </div>
@@ -259,7 +274,7 @@ export function RankingView() {
         </div>
       </div>
 
-      {newPlayers.length > 0 && (
+      {newPlayers.length > 0 && activeFilter !== 'krabbler' && (
         <div className="felt-card p-4">
           <div className="text-center mb-3">
             <h3 className="font-display text-base font-bold text-white">Neu dabei</h3>
@@ -277,7 +292,7 @@ export function RankingView() {
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-white text-xs truncate">{np.name}</span>
+                        <span className="font-bold text-white text-xs truncate"><PlayerLink id={np.id}>{np.name}</PlayerLink></span>
                         <span className="px-1.5 rounded-full bg-emerald-950 border border-emerald-700/60 text-[10px] text-emerald-300 font-bold">
                           {np.level}
                         </span>

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Trophy,
   Plus,
@@ -11,12 +11,14 @@ import {
   Users,
   ShieldCheck,
   Bell,
+  MoreHorizontal,
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { supabase } from '@/lib/supabaseClient';
 import { getActionableMatches, isAdminRole } from '@/lib/matchViews';
 
-export type TabType = 'dashboard' | 'ranking' | 'matches' | 'tournaments' | 'players' | 'profile' | 'admin';
+import { TabType } from '@/lib/navigation';
+export type { TabType } from '@/lib/navigation';
 
 interface NavigationProps {
   currentTab: TabType;
@@ -40,6 +42,28 @@ export function Navigation({
   onOpenMatchEntry,
   onOpenConfirmations,
 }: NavigationProps) {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
+  const moreButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!moreOpen) return;
+    moreRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    const close = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMoreOpen(false);
+        moreButton.current?.focus();
+      }
+    };
+    const outside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !moreRef.current?.contains(event.target) && !moreButton.current?.contains(event.target)) setMoreOpen(false);
+    };
+    window.addEventListener('keydown', close);
+    window.addEventListener('pointerdown', outside);
+    return () => {
+      window.removeEventListener('keydown', close);
+      window.removeEventListener('pointerdown', outside);
+    };
+  }, [moreOpen]);
   const { currentUser, matches, players, switchUser } = useStore();
 
   const actionable = getActionableMatches(matches, currentUser?.id);
@@ -48,11 +72,15 @@ export function Navigation({
   const tabs = isAdmin
     ? [...TOP_TABS, { id: 'admin' as TabType, label: 'Verwaltung', icon: ShieldCheck }]
     : TOP_TABS;
+  const selectTab = (tab: TabType) => {
+    setMoreOpen(false);
+    onSelectTab(tab);
+  };
 
   const bottomItem = (tab: TabType, label: string, Icon: React.ComponentType<{ className?: string }>) => (
     <button
       type="button"
-      onClick={() => onSelectTab(tab)}
+      onClick={() => selectTab(tab)}
       aria-current={currentTab === tab ? 'page' : undefined}
       className={`flex-1 min-w-0 min-h-[48px] py-1.5 rounded-xl flex flex-col items-center justify-center transition-all ${
         currentTab === tab
@@ -72,7 +100,7 @@ export function Navigation({
           <div className="max-w-4xl mx-auto flex items-center justify-between gap-2">
             <button
               type="button"
-              onClick={() => onSelectTab('dashboard')}
+              onClick={() => selectTab('dashboard')}
               className="flex items-center gap-2.5 min-h-[44px] min-w-0 group text-left"
             >
               <div className="w-9 h-9 shrink-0 rounded-xl bg-gradient-to-br from-amber-600 via-amber-700 to-amber-900 p-0.5 shadow-md flex items-center justify-center">
@@ -132,34 +160,24 @@ export function Navigation({
             </div>
           </div>
 
-          <nav
-            aria-label="Bereiche"
-            className="max-w-4xl mx-auto mt-1.5 -mx-3 sm:mx-auto px-3 sm:px-0 overflow-x-auto no-scrollbar flex items-center gap-1.5 pb-2"
-          >
-            {tabs.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => onSelectTab(id)}
-                aria-current={currentTab === id ? 'page' : undefined}
-                className={`min-h-[44px] px-3.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
-                  currentTab === id
-                    ? 'bg-amber-400 text-stone-950 font-bold shadow-md shadow-amber-500/20'
-                    : id === 'admin'
-                    ? 'text-amber-300/80 hover:text-white hover:bg-amber-950/40'
-                    : 'text-emerald-200/80 hover:text-white hover:bg-emerald-900/40'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                {label}
-              </button>
-            ))}
-          </nav>
         </div>
       </header>
 
       {/* Floating wooden bottom navigation */}
       <div className="fixed bottom-0 left-0 right-0 z-40 px-3 pointer-events-none flex justify-center pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        {moreOpen && (
+          <div ref={moreRef} id="more-navigation" className="pointer-events-auto absolute bottom-full mb-3 w-[calc(100%-1.5rem)] max-w-md felt-card p-2 shadow-2xl">
+            <nav aria-label="Weitere Bereiche" className="grid grid-cols-2 gap-2">
+              {tabs.filter(({ id }) => ['players', 'tournaments', 'profile', 'admin'].includes(id)).map(({ id, label, icon: Icon }) => (
+                <button key={id} type="button" aria-current={currentTab === id ? 'page' : undefined}
+                  onClick={() => { setMoreOpen(false); onSelectTab(id); moreButton.current?.focus(); }}
+                  className={`min-h-[48px] rounded-xl px-3 flex items-center gap-2 text-sm font-bold ${currentTab === id ? 'bg-emerald-800 text-amber-300' : 'text-emerald-200 hover:bg-emerald-900'}`}>
+                  <Icon className="w-5 h-5" />{label}
+                </button>
+              ))}
+            </nav>
+          </div>
+        )}
         <nav
           aria-label="Hauptnavigation"
           className="pointer-events-auto w-full max-w-md rounded-2xl bg-gradient-to-b from-[#5c351b] via-[#3a200f] to-[#241308] p-1.5 shadow-[0_10px_30px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.3)] border border-[#7e4b27] flex items-center gap-1"
@@ -169,7 +187,7 @@ export function Navigation({
 
           <button
             type="button"
-            onClick={onOpenMatchEntry}
+            onClick={() => { setMoreOpen(false); onOpenMatchEntry(); }}
             className="relative -top-2 shrink-0 w-14 h-14 rounded-2xl bg-gradient-to-b from-emerald-500 via-emerald-600 to-emerald-800 shadow-[0_4px_16px_rgba(34,197,94,0.5),inset_0_1px_1px_rgba(255,255,255,0.4)] border border-[#d97706] flex items-center justify-center text-white active:scale-95 transition-transform"
             aria-label="Spiel eintragen"
           >
@@ -177,7 +195,11 @@ export function Navigation({
           </button>
 
           {bottomItem('matches', 'Spiele', Swords)}
-          {bottomItem('profile', 'Profil', User)}
+          <button ref={moreButton} type="button" aria-expanded={moreOpen} aria-controls="more-navigation"
+            onClick={() => setMoreOpen(!moreOpen)}
+            className={`flex-1 min-w-0 min-h-[48px] rounded-xl flex flex-col items-center justify-center ${['players', 'tournaments', 'profile', 'admin'].includes(currentTab) || moreOpen ? 'bg-emerald-950/80 text-amber-300' : 'text-amber-200/70'}`}>
+            <MoreHorizontal className="w-5 h-5 mb-0.5" /><span className="text-[10px] font-bold">Mehr</span>
+          </button>
         </nav>
       </div>
     </>

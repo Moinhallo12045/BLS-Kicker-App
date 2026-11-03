@@ -17,10 +17,12 @@ import {
   validateScore,
 } from '@/lib/matchViews';
 import { Check, X, AlertTriangle, Clock, Swords, RefreshCw, Trash2, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { useAppNavigation } from './AppNavigation';
 
 interface ConfirmationDrawerProps {
   isOpen: boolean;
   onClose: () => void;
+  matchId?: string;
 }
 
 type Feedback = { text: string; error: boolean };
@@ -28,7 +30,8 @@ type Feedback = { text: string; error: boolean };
 const scoreInputClass =
   'w-14 h-11 text-center text-base font-bold bg-stone-950 border border-emerald-600 rounded-lg text-amber-400 focus:outline-none focus:border-amber-400';
 
-export function ConfirmationDrawer({ isOpen, onClose }: ConfirmationDrawerProps) {
+export function ConfirmationDrawer({ isOpen, onClose, matchId }: ConfirmationDrawerProps) {
+  const { openMatch } = useAppNavigation();
   const {
     currentUser,
     matches,
@@ -72,7 +75,13 @@ export function ConfirmationDrawer({ isOpen, onClose }: ConfirmationDrawerProps)
   if (!isOpen || !currentUser) return null;
 
   const isAdmin = isAdminRole(currentUser.role);
-  const { pending: pendingForMe, disputed: disputedForMe, cancellations } = getActionableMatches(matches, currentUser.id);
+  const scopedMatches = matchId ? matches.filter((match) => match.id === matchId) : matches;
+  const actionable = getActionableMatches(scopedMatches, currentUser.id);
+  const pendingForMe = matchId ? scopedMatches.filter((match) => !match.tournamentId && teamOf(match, currentUser.id) && (match.status === 'pending' || match.status === 'confirmed')) : actionable.pending;
+  const disputedForMe = actionable.disputed;
+  const cancellations = actionable.cancellations.filter((match) => !pendingForMe.includes(match));
+  const detailsLink = (id: string) => !matchId && <button type="button" onClick={() => { onClose(); openMatch(id); }}
+    className="min-h-[44px] text-xs font-bold text-amber-300 hover:underline">Spielinformationen →</button>;
 
   const setMatchFeedback = (matchId: string, result: ActionResult) =>
     setFeedback((prev) => ({ ...prev, [matchId]: { text: result.message, error: !result.success } }));
@@ -214,7 +223,7 @@ export function ConfirmationDrawer({ isOpen, onClose }: ConfirmationDrawerProps)
 
         <div className="pr-12">
           <h3 id="confirmation-title" className="font-display text-xl font-bold text-white">
-            Neu für dich
+            {matchId ? 'Ergebnis prüfen' : 'Neu für dich'}
           </h3>
           <p className="text-xs text-emerald-300/80 mt-0.5">
             Neue Ergebnisse ansehen oder strittige Spiele direkt mit der Gegenseite klären. Turnierspiele werden im Turnierbaum korrigiert.
@@ -225,7 +234,7 @@ export function ConfirmationDrawer({ isOpen, onClose }: ConfirmationDrawerProps)
         <section className="space-y-3">
           <div className="text-xs font-bold uppercase tracking-wider text-amber-400/90 flex items-center gap-1.5 border-b border-emerald-900/40 pb-1">
             <Clock className="w-3.5 h-3.5" />
-            Neue Spielergebnisse ({pendingForMe.length})
+            {matchId ? 'Spielergebnis' : 'Neue Spielergebnisse'} ({pendingForMe.length})
           </div>
 
           {pendingForMe.length === 0 ? (
@@ -243,6 +252,7 @@ export function ConfirmationDrawer({ isOpen, onClose }: ConfirmationDrawerProps)
 
                 return (
                   <div key={m.id} className="py-3 space-y-2">
+                    {detailsLink(m.id)}
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="text-xs text-emerald-200">
@@ -258,12 +268,12 @@ export function ConfirmationDrawer({ isOpen, onClose }: ConfirmationDrawerProps)
 
                       <button
                         type="button"
-                        disabled={Boolean(busyMatchId)}
+                        disabled={Boolean(busyMatchId) || m.confirmedBy.includes(currentUser.id)}
                         onClick={() => perform(m.id, () => acknowledgeMatch(m.id), 'Konnte nicht als gesehen markiert werden.')}
                         className="shrink-0 min-h-[44px] px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow disabled:opacity-60"
                       >
                         {busy && !isDisputingThis ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                        Gesehen
+                        {m.confirmedBy.includes(currentUser.id) ? 'Bereits gesehen' : 'Gesehen'}
                       </button>
                     </div>
 
@@ -371,6 +381,7 @@ export function ConfirmationDrawer({ isOpen, onClose }: ConfirmationDrawerProps)
             </div>
             {cancellations.map((m) => (
               <div key={m.id} className="p-3 rounded-xl bg-red-950/20 border border-red-700/40 space-y-1">
+                {detailsLink(m.id)}
                 <div className="text-xs font-bold text-white">
                   {playerNames(players, m.teamA)} vs {playerNames(players, m.teamB)} · {m.scoreA}:{m.scoreB}
                 </div>
@@ -403,6 +414,7 @@ export function ConfirmationDrawer({ isOpen, onClose }: ConfirmationDrawerProps)
 
                 return (
                   <div key={m.id} className="p-3 rounded-xl bg-red-950/20 border border-red-600/50 space-y-2.5">
+                    {detailsLink(m.id)}
                     <div className="flex flex-wrap items-center justify-between gap-1 text-xs">
                       <span className="font-bold text-white">{teamANames} vs {teamBNames}</span>
                       <span className="text-[10px] text-red-400 font-semibold uppercase">Strittig ({m.date})</span>

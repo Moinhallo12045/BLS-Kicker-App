@@ -12,6 +12,8 @@ import {
   teamOf,
 } from '@/lib/matchViews';
 import { Swords, CheckCircle2, Clock, AlertTriangle, Ban, Crown, Loader2, AlertCircle } from 'lucide-react';
+import { PlayerLink, useAppNavigation } from './AppNavigation';
+import { DEFAULT_MATCH_FILTERS, filterMatches } from '@/lib/matchFilters';
 
 type Feedback = { text: string; error: boolean };
 
@@ -58,21 +60,24 @@ function StatusBadge({ match }: { match: Match }) {
   );
 }
 
-export function MatchesView({ onOpenMatchEntry }: { onOpenMatchEntry: () => void }) {
+export function MatchesView({ onOpenMatchEntry, matchId, playerId }: { onOpenMatchEntry: () => void; matchId?: string; playerId?: string }) {
+  const { openMatch, matchFilters, setMatchFilters } = useAppNavigation();
   const { matches, players, currentUser, acceptDisputeResolution, cancelMatchByMutualAgreement } = useStore();
-  const [filterMode, setFilterMode] = useState<'all' | MatchMode>('all');
-  const [filterStatus, setFilterStatus] = useState<'all' | MatchStatus>('all');
+  const filterKey = playerId ? `player-${playerId}` : 'all';
+  const filters = matchFilters[filterKey] || DEFAULT_MATCH_FILTERS;
+  const { mode: filterMode, status: filterStatus, onlyMine } = filters;
+  const setFilterMode = (mode: 'all' | MatchMode) => setMatchFilters(filterKey, { ...filters, mode });
+  const setFilterStatus = (status: 'all' | MatchStatus) => setMatchFilters(filterKey, { ...filters, status });
+  const setOnlyMine = (mine: boolean) => setMatchFilters(filterKey, { ...filters, onlyMine: mine });
   const [busyMatchId, setBusyMatchId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Record<string, Feedback>>({});
 
   const getPlayer = (id: string) => players.find((p) => p.id === id);
   const isAdmin = isAdminRole(currentUser?.role);
 
-  const filteredMatches = matches.filter((m) => {
-    if (filterMode !== 'all' && m.mode !== filterMode) return false;
-    if (filterStatus !== 'all' && m.status !== filterStatus) return false;
-    return true;
-  });
+  const filteredMatches = matchId ? matches.filter((match) => match.id === matchId)
+    : filterMatches(matches, filters, currentUser?.id, playerId)
+      .sort((a, b) => (b.createdAt || b.date).localeCompare(a.createdAt || a.date) || b.id.localeCompare(a.id));
 
   const perform = async (matchId: string, action: () => unknown, fallbackError: string) => {
     if (busyMatchId) return;
@@ -95,11 +100,12 @@ export function MatchesView({ onOpenMatchEntry }: { onOpenMatchEntry: () => void
 
   return (
     <div className="space-y-5">
+      {!matchId && <>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h2 className="font-display text-2xl font-bold text-white flex items-center gap-2">
             <Swords className="w-6 h-6 text-amber-400" />
-            Spiele & Ergebnisse
+            {playerId ? 'Spielhistorie' : 'Spiele & Ergebnisse'}
           </h2>
           <p className="text-xs text-emerald-300/80">Historie aller Liga- und Turnierbegegnungen</p>
         </div>
@@ -114,6 +120,13 @@ export function MatchesView({ onOpenMatchEntry }: { onOpenMatchEntry: () => void
       </div>
 
       <div className="space-y-1.5 bg-[#07160f]/60 p-2 rounded-2xl border border-emerald-900/60">
+        {!playerId && <div className="flex gap-2" role="group" aria-label="Teilnahme filtern">
+          {[false, true].map((mine) => <button key={String(mine)} type="button" aria-pressed={onlyMine === mine}
+            onClick={() => setOnlyMine(mine)}
+            className={`min-h-[44px] px-3 rounded-full text-xs font-bold ${onlyMine === mine ? 'bg-amber-400 text-stone-950' : 'text-emerald-300'}`}>
+            {mine ? 'Meine Spiele' : 'Alle Spiele'}
+          </button>)}
+        </div>}
         <div className="flex items-center gap-1 overflow-x-auto no-scrollbar" role="group" aria-label="Modus filtern">
           {(['all', '1v1', '2v2'] as const).map((m) => (
             <button
@@ -145,7 +158,7 @@ export function MatchesView({ onOpenMatchEntry }: { onOpenMatchEntry: () => void
           ))}
         </div>
       </div>
-
+      </>}
       <div className="space-y-3">
         {filteredMatches.length === 0 ? (
           <div className="felt-card p-8 text-center text-emerald-300/60 text-xs">
@@ -214,7 +227,7 @@ export function MatchesView({ onOpenMatchEntry }: { onOpenMatchEntry: () => void
                   <div className="text-right min-w-0">
                     {teamAPlayers.map((p, i) => (
                       <div key={p?.id || i} className={`text-xs font-bold truncate ${nameClass(isWinnerA)}`}>
-                        {p?.name || 'Unbekannt'}
+                        {p ? <PlayerLink id={p.id}>{p.name}</PlayerLink> : 'Unbekannt'}
                       </div>
                     ))}
                     {counted && m.eloChangeA !== 0 && (
@@ -231,7 +244,7 @@ export function MatchesView({ onOpenMatchEntry }: { onOpenMatchEntry: () => void
                   <div className="text-left min-w-0">
                     {teamBPlayers.map((p, i) => (
                       <div key={p?.id || i} className={`text-xs font-bold truncate ${nameClass(!isWinnerA)}`}>
-                        {p?.name || 'Unbekannt'}
+                        {p ? <PlayerLink id={p.id}>{p.name}</PlayerLink> : 'Unbekannt'}
                       </div>
                     ))}
                     {counted && m.eloChangeB !== 0 && (
@@ -242,6 +255,8 @@ export function MatchesView({ onOpenMatchEntry }: { onOpenMatchEntry: () => void
                   </div>
                 </div>
 
+                {!matchId && <button type="button" onClick={() => openMatch(m.id)}
+                  className="min-h-[44px] mt-2 text-xs font-bold text-amber-300 hover:underline">Spielinformationen →</button>}
                 {m.status === 'disputed' && (
                   <div className="mt-3 p-3 rounded-xl bg-red-950/40 border border-red-700/50 space-y-2">
                     <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
@@ -279,7 +294,7 @@ export function MatchesView({ onOpenMatchEntry }: { onOpenMatchEntry: () => void
                   </div>
                 )}
 
-                {!isCancelled && !isTournament && (isParticipant || isAdmin) && (m.status === 'disputed' || cancelState !== 'none') && (
+                {!isCancelled && !isTournament && (isParticipant || isAdmin) && (Boolean(matchId) || m.status === 'disputed' || cancelState !== 'none') && (
                   <div className="mt-2 flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-red-900/40 text-xs">
                     {cancelState === 'requested_by_my_side' && !isAdmin ? (
                       <span className="text-[11px] text-amber-300/80 italic">Streichung beantragt – wartet auf Gegenseite</span>

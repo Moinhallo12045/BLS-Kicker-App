@@ -5,6 +5,7 @@ import { useStore } from '@/lib/store';
 import { MatchMode, Tournament, TournamentMatch, TournamentTeam, TournamentType } from '@/types';
 import { compareTournamentStandings } from '@/lib/tournaments';
 import { Crown, Plus, Trophy, X } from 'lucide-react';
+import { PlayerLink, useAppNavigation } from './AppNavigation';
 
 const fieldClass = 'min-h-[44px] w-full min-w-0 rounded-xl border border-emerald-700 bg-emerald-950 p-3 text-base text-white focus:outline-none focus:ring-2 focus:ring-amber-400';
 const buttonClass = 'min-h-[44px] rounded-xl px-3 py-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:opacity-50';
@@ -106,8 +107,10 @@ function Modal({ title, busy, onClose, children }: {
 }
 
 export function TournamentView() {
+  const { openMatch, openTournament, location } = useAppNavigation();
   const { tournaments, players, currentUser, createTournament, advanceTournamentMatch, isLoading, syncError } = useStore();
-  const [selectedId, setSelectedId] = useState('');
+  const selectedId = location.tournamentId || '';
+  const setSelectedId = openTournament;
   const [selectedRound, setSelectedRound] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState('');
@@ -336,10 +339,12 @@ export function TournamentView() {
                       <p className="mb-2 text-xs text-emerald-400">Spiel {index + 1} · {winner ? 'Gewertet' : a && b ? 'Bereit' : 'Wartet auf vorherige Runde'}</p>
                       {([{ team: a, score: match.scoreA }, { team: b, score: match.scoreB }]).map((side, sideIndex) => (
                         <div key={sideIndex} className={`flex min-w-0 items-start justify-between gap-3 py-2 text-sm ${side.team && side.team.id === winner ? 'font-bold text-amber-300' : 'text-white'}`}>
-                          <span className="min-w-0 break-words">{teamName(side.team)}</span>
+                          <span className="min-w-0 break-words">{side.team ? side.team.playerIds.map((id, i) => <React.Fragment key={id}>{i > 0 && ' + '}<PlayerLink id={id}>{players.find((player) => player.id === id)?.name || 'Unbekannt'}</PlayerLink></React.Fragment>) : 'Noch offen'}</span>
                           <span className="shrink-0 font-mono">{side.score ?? '–'}</span>
                         </div>
                       ))}
+                      {match.leagueMatchId && <button type="button" onClick={() => openMatch(match.leagueMatchId!)}
+                        className={`${buttonClass} text-amber-300 hover:underline`}>Spielinformationen →</button>}
                       {canManage && a && b && <button type="button" className={`${buttonClass} mt-2 w-full bg-emerald-800 text-white`}
                         onClick={() => {
                           setScoring({ tournamentId: current.id, matchId: match.id });
