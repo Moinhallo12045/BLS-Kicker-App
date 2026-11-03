@@ -25,6 +25,7 @@ SELECT set_config('app.server_operation','',false);
 \ir ../migrations/20261103200000_owner_co_owner_delete_players.sql
 \ir ../migrations/20261103203000_delete_players_with_history.sql
 \ir ../migrations/20261103210000_audit_log.sql
+\ir ../migrations/20261103220000_add_match_achievement_tiers.sql
 DO $$
 DECLARE p public.profiles;
 BEGIN

@@ -23,6 +23,8 @@ export function weeklyCrawlers(matches: Match[], now = new Date()) {
 const MATCH_BADGES = new Set([
   'stammgast_1', 'siegertyp_1', 'revanche', 'eingespielt_1',
   'streak_master', 'clean_sheet', 'legend_1500', 'turnier_champ',
+  'stammgast_2', 'stammgast_3', 'eingespielt_2', 'eingespielt_3',
+  'streak_master_2', 'streak_master_3', 'allrounder_1', 'knapper_sieg',
 ]);
 
 export function isScoredMatch(match: Match): boolean {
@@ -94,9 +96,16 @@ export function rebuildLocalStatistics(players: Player[], matches: Match[], tour
       }
       p.eloHistory.push({ date: match.date, elo: p.eloTotal });
       const badges = new Set(p.badges);
-      if (p.wins1v1 + p.losses1v1 + p.wins2v2 + p.losses2v2 >= 10) badges.add('stammgast_1');
+      const played = p.wins1v1 + p.losses1v1 + p.wins2v2 + p.losses2v2;
+      if (played >= 10) badges.add('stammgast_1');
+      if (played >= 25) badges.add('stammgast_2');
+      if (played >= 50) badges.add('stammgast_3');
       if (p.wins1v1 + p.wins2v2 >= 5) badges.add('siegertyp_1');
       if (p.currentStreak >= 5) badges.add('streak_master');
+      if (p.currentStreak >= 10) badges.add('streak_master_2');
+      if (p.currentStreak >= 15) badges.add('streak_master_3');
+      if (p.wins1v1 >= 5 && p.wins2v2 >= 5) badges.add('allrounder_1');
+      if (won && Math.abs(match.scoreA - match.scoreB) === 1) badges.add('knapper_sieg');
       if (Math.max(p.elo1v1, p.elo2v2) > 1500) badges.add('legend_1500');
       if (won && Math.max(match.scoreA, match.scoreB) === 10 && Math.min(match.scoreA, match.scoreB) <= 1) badges.add('clean_sheet');
       if (won && opponents.some((opponent) => lostAgainst.get(id)?.has(opponent))) badges.add('revanche');
@@ -110,6 +119,8 @@ export function rebuildLocalStatistics(players: Player[], matches: Match[], tour
         const count = partnerWins.get(`${id}:${key}`) || 0;
         partnerWins.set(`${id}:${key}`, count + 1);
         if (count + 1 >= 3) badges.add('eingespielt_1');
+        if (count + 1 >= 10) badges.add('eingespielt_2');
+        if (count + 1 >= 25) badges.add('eingespielt_3');
       }
       p.badges = [...badges].sort();
     }
