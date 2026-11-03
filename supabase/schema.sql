@@ -217,6 +217,14 @@ WITH CHECK (
   )
 );
 
+CREATE POLICY "Owner dürfen Spieler löschen" ON public.profiles
+FOR DELETE TO authenticated
+USING (
+  (SELECT public.is_owner())
+  AND id <> (SELECT auth.uid())
+  AND role <> 'owner'
+);
+
 -- 5.4 Matches Policies
 CREATE POLICY "Jeder darf Matches lesen" ON public.matches 
 FOR SELECT USING (true);

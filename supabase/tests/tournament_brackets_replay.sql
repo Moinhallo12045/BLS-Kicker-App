@@ -4,7 +4,7 @@ BEGIN;
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000010',true);
 SET LOCAL ROLE authenticated;
 SELECT public.set_player_suspension('00000000-0000-0000-0000-000000000008',false);
-DELETE FROM public.test_tournament_state;
+DELETE FROM public.test_tournament_state WHERE TRUE;
 INSERT INTO public.test_tournament_state(tid)
 SELECT (public.create_tournament('Four pairs','Mobile KO','ko','2v2',(
  SELECT jsonb_agg(jsonb_build_object('id','pair-'||n,'playerIds',
@@ -51,7 +51,7 @@ SELECT public.test_denied($q$SELECT public.create_tournament('bad','','ko','1v1'
  '[{"id":"a","playerIds":["00000000-0000-0000-0000-000000000001"]},
  {"id":"b","playerIds":["00000000-0000-0000-0000-000000000002"]},
  {"id":"c","playerIds":["00000000-0000-0000-0000-000000000003"]}]')$q$);
-DELETE FROM public.test_tournament_state;
+DELETE FROM public.test_tournament_state WHERE TRUE;
 INSERT INTO public.test_tournament_state(tid)
 SELECT (public.create_tournament('Group','','groups','1v1',
  '[{"id":"a","playerIds":["00000000-0000-0000-0000-000000000001"]},
@@ -132,8 +132,8 @@ ROLLBACK;
 -- Replay benchmark uses fixed player count and increasing history size.
 BEGIN;
 SELECT set_config('app.server_operation','true',true);
-DELETE FROM public.matches;
-DELETE FROM public.tournaments;
+DELETE FROM public.matches WHERE TRUE;
+DELETE FROM public.tournaments WHERE TRUE;
 INSERT INTO public.matches(mode,team_a,team_b,score_a,score_b,status,result_applied,created_at)
 SELECT '2v2',ARRAY['00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002']::UUID[],
  ARRAY['00000000-0000-0000-0000-000000000003','00000000-0000-0000-0000-000000000004']::UUID[],
@@ -166,8 +166,8 @@ ROLLBACK;
 
 BEGIN;
 SELECT set_config('app.server_operation','true',true);
-DELETE FROM public.matches;
-DELETE FROM public.tournaments;
+DELETE FROM public.matches WHERE TRUE;
+DELETE FROM public.tournaments WHERE TRUE;
 INSERT INTO public.matches(mode,team_a,team_b,score_a,score_b,status,result_applied,created_at)
 SELECT '1v1',ARRAY['00000000-0000-0000-0000-000000000001']::UUID[],
   ARRAY['00000000-0000-0000-0000-000000000002']::UUID[],10,5,'confirmed',true,
