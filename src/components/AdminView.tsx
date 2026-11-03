@@ -5,6 +5,7 @@ import { useStore } from '@/lib/store';
 import { ShieldCheck, AlertTriangle, Key, Users, Edit2, Trash2, Mail, Plus, Loader2 } from 'lucide-react';
 import { Player, PlayerRole } from '@/types';
 import { isAdminRole, parseScore, playerNames, runAction, validateScore } from '@/lib/matchViews';
+import { AuditLog } from './AuditLog';
 
 const ROLE_LABELS: Record<PlayerRole, string> = {
   owner: 'Owner',
@@ -48,6 +49,7 @@ export function AdminView() {
     removeWhitelistEntry,
     updatePlayerRole,
     setPlayerSuspension,
+    deletePlayer,
   } = useStore();
 
   const [newCode, setNewCode] = useState('');
@@ -56,6 +58,7 @@ export function AdminView() {
   const [notification, setNotification] = useState<Notice | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryAction = useRef<(() => Promise<unknown>) | null>(null);
 
   const [resolvingMatchId, setResolvingMatchId] = useState<string | null>(null);
   const [customScoreA, setCustomScoreA] = useState('');
@@ -79,6 +82,7 @@ export function AdminView() {
     const result = await runAction(action, { fallbackError });
     setBusyKey(null);
     notify(result.message, !result.success);
+    retryAction.current = result.success ? null : () => perform(key,action,fallbackError);
     return result;
   };
 
@@ -162,6 +166,8 @@ export function AdminView() {
           }`}
         >
           {notification.text}
+          {notification.error && retryAction.current && <button type="button" disabled={Boolean(busyKey)}
+            onClick={() => void retryAction.current?.()} className="min-h-[44px] ml-3 underline disabled:opacity-50">Erneut versuchen</button>}
         </div>
       )}
 
@@ -442,16 +448,23 @@ export function AdminView() {
       <section className="felt-card p-4 sm:p-5 space-y-4">
         <h3 className="font-display text-lg font-bold text-white flex items-center gap-2">
           <Users className="w-5 h-5 text-amber-400" />
-          Spieler-Rollen ({players.length} Spieler)
+          Spieler-Rollen ({players.filter((p) => !p.isDeleted).length} Spieler)
         </h3>
+        <p className="text-[11px] text-emerald-300/80">
+          Owner und Co-Owner können Spieler auch mit Historie löschen. Das Profil wird
+          anonymisiert und deaktiviert; Ergebnisse bleiben erhalten. Eigener Account und Owner-Profile sind geschützt.
+        </p>
 
         <div className="max-h-[28rem] overflow-y-auto overscroll-contain space-y-1.5 pr-1">
-          {players.map((p) => {
+          {players.filter((p) => !p.isDeleted).map((p) => {
             const roles = assignableRoles(currentUser, p);
             const roleEditable = roles.length > 0;
             const suspendable = canSuspend(currentUser, p);
             const roleKey = `role-${p.id}`;
             const suspendKey = `suspend-${p.id}`;
+            const deletable = ['owner', 'co_owner'].includes(currentUser.role)
+              && p.id !== currentUser.id && p.role !== 'owner';
+            const deleteKey = `delete-${p.id}`;
             return (
               <div
                 key={p.id}
@@ -518,12 +531,28 @@ export function AdminView() {
                       {p.isSuspended ? 'Entsperren' : 'Sperren'}
                     </button>
                   )}
+                  {deletable && (
+                    <button
+                      type="button"
+                      disabled={Boolean(busyKey)}
+                      aria-label={`${p.name} löschen`}
+                      onClick={() => {
+                        if (!window.confirm(`${p.name} dauerhaft löschen und anonymisieren? Frühere Spiele und Ergebnisse bleiben erhalten. Diese Aktion kann nicht rückgängig gemacht werden.`)) return;
+                        void perform(deleteKey, () => deletePlayer(p.id), 'Spieler konnte nicht gelöscht werden.');
+                      }}
+                      className="min-h-[44px] rounded-lg px-3 text-[11px] font-bold flex items-center gap-1 bg-red-900/40 text-red-300 disabled:opacity-50"
+                    >
+                      {busyKey === deleteKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                      Löschen
+                    </button>
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
       </section>
+      <AuditLog />
     </div>
   );
 }

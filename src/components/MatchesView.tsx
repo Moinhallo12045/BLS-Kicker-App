@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useStore } from '@/lib/store';
 import { Match, MatchStatus, MatchMode } from '@/types';
 import {
@@ -71,6 +71,7 @@ export function MatchesView({ onOpenMatchEntry, matchId, playerId }: { onOpenMat
   const setOnlyMine = (mine: boolean) => setMatchFilters(filterKey, { ...filters, onlyMine: mine });
   const [busyMatchId, setBusyMatchId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Record<string, Feedback>>({});
+  const retries = useRef<Record<string, () => Promise<void>>>({});
 
   const getPlayer = (id: string) => players.find((p) => p.id === id);
   const isAdmin = isAdminRole(currentUser?.role);
@@ -85,6 +86,8 @@ export function MatchesView({ onOpenMatchEntry, matchId, playerId }: { onOpenMat
     const result = await runAction(action, { fallbackError });
     setBusyMatchId(null);
     setFeedback((prev) => ({ ...prev, [matchId]: { text: result.message, error: !result.success } }));
+    if (result.success) delete retries.current[matchId];
+    else retries.current[matchId] = () => perform(matchId,action,fallbackError);
   };
 
   const handleCancel = (m: Match) => {
@@ -336,6 +339,8 @@ export function MatchesView({ onOpenMatchEntry, matchId, playerId }: { onOpenMat
                   >
                     {item.error ? <AlertCircle className="w-3.5 h-3.5 shrink-0" /> : <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />}
                     <span className="break-words">{item.text}</span>
+                    {item.error && retries.current[m.id] && <button type="button" disabled={Boolean(busyMatchId)}
+                      onClick={() => void retries.current[m.id]?.()} className="min-h-[44px] shrink-0 underline disabled:opacity-50">Erneut versuchen</button>}
                   </div>
                 )}
               </div>

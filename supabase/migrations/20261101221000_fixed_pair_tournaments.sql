@@ -35,7 +35,7 @@ BEGIN
           OR (t.winner_team_id IS NULL AND t.winner_id=p.id))
       )
     ) earned
-  );
+  ) WHERE p.id IS NOT NULL;
   PERFORM set_config('app.server_operation',coalesce(prior,''),true);
 END;
 $$;

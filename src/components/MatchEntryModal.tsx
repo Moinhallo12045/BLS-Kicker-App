@@ -6,6 +6,7 @@ import { useStore } from '@/lib/store';
 import { ExternalLabel } from './ExternalLabel';
 import { MAX_SCORE, runAction, validateScore } from '@/lib/matchViews';
 import { X, Search, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { suggestedPlayers } from '@/lib/playerSuggestions';
 
 interface MatchEntryModalProps {
   isOpen: boolean;
@@ -26,7 +27,7 @@ const SCORE_PRESETS: [number, number][] = [
 ];
 
 export function MatchEntryModal({ isOpen, onClose }: MatchEntryModalProps) {
-  const { currentUser, players, submitMatch } = useStore();
+  const { currentUser, players, matches, submitMatch } = useStore();
 
   const [mode, setMode] = useState<MatchMode>('1v1');
   const [activeSlot, setActiveSlot] = useState<SlotType>('opponent1');
@@ -92,7 +93,7 @@ export function MatchEntryModal({ isOpen, onClose }: MatchEntryModalProps) {
   const activeSlotId = activeSlot === 'partner' ? partnerId : activeSlot === 'opponent1' ? opponent1Id : opponent2Id;
 
   const query = searchQuery.trim().toLowerCase();
-  const filteredPlayers = players.filter((p) => {
+  const filteredPlayers = suggestedPlayers(players, matches, currentUser.id, activeSlot === 'partner').filter(({player: p}) => {
     if (!isEligible(p)) return false;
     if (selectedIds.includes(p.id) && p.id !== activeSlotId) return false;
     if (mode === '1v1' && p.id === activeSlotId) return false;
@@ -356,7 +357,7 @@ export function MatchEntryModal({ isOpen, onClose }: MatchEntryModalProps) {
             </div>
           ) : (
             <div className="grid grid-cols-3 min-[380px]:grid-cols-4 gap-2 max-h-44 overflow-y-auto overscroll-contain pr-1">
-              {filteredPlayers.map((p) => {
+              {filteredPlayers.map(({player: p, count}) => {
                 const isCurrentSlot = p.id === activeSlotId;
                 return (
                   <button
@@ -375,6 +376,7 @@ export function MatchEntryModal({ isOpen, onClose }: MatchEntryModalProps) {
                       {p.avatar}
                     </div>
                     <div className="text-[11px] font-bold text-white truncate w-full">{p.name}</div>
+                    {count > 0 && <span className="text-[9px] text-amber-300">{count}× {activeSlot === 'partner' ? 'Partner' : 'Gegner'}</span>}
                     <div className="text-[9px] text-emerald-400/70">{p.isExternal ? <ExternalLabel /> : `(${p.yearJoined})`}</div>
                   </button>
                 );
@@ -455,7 +457,7 @@ export function MatchEntryModal({ isOpen, onClose }: MatchEntryModalProps) {
           ) : (
             <>
               <Check className="w-5 h-5 stroke-[3]" />
-              Ergebnis verbindlich melden
+              {notification?.error ? 'Erneut versuchen' : 'Ergebnis verbindlich melden'}
             </>
           )}
         </button>

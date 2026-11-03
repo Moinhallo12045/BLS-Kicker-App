@@ -56,7 +56,8 @@ function peakElo(player: Player): number {
 }
 
 export function RankingView() {
-  const { players, matches, tournaments, currentUser } = useStore();
+  const { players: allPlayers, matches, tournaments, currentUser } = useStore();
+  const players = allPlayers.filter((p) => !p.isDeleted);
   const { location, selectTab } = useAppNavigation();
   const activeFilter = location.ranking;
   const [showRulesModal, setShowRulesModal] = useState(false);

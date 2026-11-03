@@ -424,7 +424,7 @@ export function TournamentView() {
               </div>
             </fieldset>
             {createError && <p role="alert" className="rounded-xl bg-red-950 p-3 text-sm text-red-200">{createError}</p>}
-            <button type="submit" disabled={creating || !canManage} className={`${buttonClass} w-full bg-amber-400 text-stone-950`}>{creating ? 'Wird gespeichert…' : 'Turnier erstellen'}</button>
+            <button type="submit" disabled={creating || !canManage} className={`${buttonClass} w-full bg-amber-400 text-stone-950`}>{creating ? 'Wird gespeichert…' : createError ? 'Erneut versuchen' : 'Turnier erstellen'}</button>
           </form>
         </Modal>
       )}
@@ -452,7 +452,7 @@ export function TournamentView() {
             {scoreError && <p role="alert" className="rounded-xl bg-red-950 p-3 text-sm text-red-200">{scoreError}</p>}
             <div className="grid grid-cols-2 gap-2">
               <button type="button" disabled={saving} onClick={() => setScoring(null)} className={`${buttonClass} bg-stone-800 text-white`}>Abbrechen</button>
-              <button type="submit" disabled={saving || !canManage || !scoringMatch || (isCorrection && !correctionConfirmed)} className={`${buttonClass} bg-amber-400 text-stone-950`}>{saving ? 'Speichert…' : 'Speichern'}</button>
+              <button type="submit" disabled={saving || !canManage || !scoringMatch || (isCorrection && !correctionConfirmed)} className={`${buttonClass} bg-amber-400 text-stone-950`}>{saving ? 'Speichert…' : scoreError ? 'Erneut versuchen' : 'Speichern'}</button>
             </div>
           </form>
         </Modal>

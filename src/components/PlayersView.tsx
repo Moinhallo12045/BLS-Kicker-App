@@ -17,12 +17,12 @@ export function PlayersView({ comparePlayerId }: { comparePlayerId?: string }) {
 
   // Always resolve from current store state so details never go stale.
   const selectedPlayer = selectedId ? players.find((p) => p.id === selectedId) || null : null;
-  const compareCandidates = selectedPlayer ? players.filter((p) => p.id !== selectedPlayer.id) : [];
+  const compareCandidates = selectedPlayer ? players.filter((p) => !p.isDeleted && p.id !== selectedPlayer.id) : [];
   const comparePlayer =
     compareCandidates.find((p) => p.id === compareId) || compareCandidates[0] || null;
 
   const query = searchQuery.trim().toLowerCase();
-  const filtered = players.filter((p) => p.name.toLowerCase().includes(query));
+  const filtered = players.filter((p) => !p.isDeleted && p.name.toLowerCase().includes(query));
 
   const openPlayer = (playerId: string) => {
     navigateToPlayer(playerId);
@@ -44,7 +44,7 @@ export function PlayersView({ comparePlayerId }: { comparePlayerId?: string }) {
           Spieler-Community
         </h2>
         <p className="text-xs text-emerald-300/80">
-          Entdecke alle {players.length} registrierten Kicker-Kollegen und vergleiche direkte Duelle
+          Entdecke alle {players.filter((p) => !p.isDeleted).length} registrierten Kicker-Kollegen und vergleiche direkte Duelle
         </p>
       </div>
 
