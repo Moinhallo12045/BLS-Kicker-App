@@ -11,10 +11,14 @@ BEGIN
   IF played>=25 THEN earned:=array_append(earned,'stammgast_2'); END IF;
   IF played>=50 THEN earned:=array_append(earned,'stammgast_3'); END IF;
   IF p.wins_1v1+p.wins_2v2>=5 THEN earned:=array_append(earned,'siegertyp_1'); END IF;
+  IF p.wins_1v1+p.wins_2v2>=25 THEN earned:=array_append(earned,'siegertyp_2'); END IF;
+  IF p.wins_1v1+p.wins_2v2>=50 THEN earned:=array_append(earned,'siegertyp_3'); END IF;
   IF p.current_streak>=5 THEN earned:=array_append(earned,'streak_master'); END IF;
   IF p.current_streak>=10 THEN earned:=array_append(earned,'streak_master_2'); END IF;
   IF p.current_streak>=15 THEN earned:=array_append(earned,'streak_master_3'); END IF;
   IF p.wins_1v1>=5 AND p.wins_2v2>=5 THEN earned:=array_append(earned,'allrounder_1'); END IF;
+  IF p.wins_1v1>=10 AND p.wins_2v2>=10 THEN earned:=array_append(earned,'allrounder_2'); END IF;
+  IF p.wins_1v1>=25 AND p.wins_2v2>=25 THEN earned:=array_append(earned,'allrounder_3'); END IF;
   IF p_won AND abs(p_match.score_a-p_match.score_b)=1 THEN earned:=array_append(earned,'knapper_sieg'); END IF;
   IF p_won AND greatest(p_match.score_a,p_match.score_b)=10 AND least(p_match.score_a,p_match.score_b)<=1 THEN
     earned:=array_append(earned,'clean_sheet');
@@ -37,7 +41,7 @@ DECLARE definition TEXT; old_badges TEXT; new_badges TEXT;
 BEGIN
   definition:=pg_get_functiondef('public.rebuild_match_stats()'::regprocedure);
   old_badges:='''stammgast_1'',''siegertyp_1'',''revanche'',''eingespielt_1'',''streak_master'',''clean_sheet'',''legend_1500'',''turnier_champ''';
-  new_badges:='''stammgast_1'',''stammgast_2'',''stammgast_3'',''siegertyp_1'',''revanche'',''eingespielt_1'',''eingespielt_2'',''eingespielt_3'',''streak_master'',''streak_master_2'',''streak_master_3'',''allrounder_1'',''knapper_sieg'',''clean_sheet'',''legend_1500'',''turnier_champ''';
+  new_badges:='''stammgast_1'',''stammgast_2'',''stammgast_3'',''siegertyp_1'',''siegertyp_2'',''siegertyp_3'',''revanche'',''eingespielt_1'',''eingespielt_2'',''eingespielt_3'',''streak_master'',''streak_master_2'',''streak_master_3'',''allrounder_1'',''allrounder_2'',''allrounder_3'',''knapper_sieg'',''clean_sheet'',''legend_1500'',''turnier_champ''';
   IF position(old_badges IN definition)=0 THEN
     RAISE EXCEPTION 'Cannot locate derived badge reset list in rebuild_match_stats()';
   END IF;

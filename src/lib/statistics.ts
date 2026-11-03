@@ -23,8 +23,9 @@ export function weeklyCrawlers(matches: Match[], now = new Date()) {
 const MATCH_BADGES = new Set([
   'stammgast_1', 'siegertyp_1', 'revanche', 'eingespielt_1',
   'streak_master', 'clean_sheet', 'legend_1500', 'turnier_champ',
-  'stammgast_2', 'stammgast_3', 'eingespielt_2', 'eingespielt_3',
-  'streak_master_2', 'streak_master_3', 'allrounder_1', 'knapper_sieg',
+  'stammgast_2', 'stammgast_3', 'siegertyp_2', 'siegertyp_3',
+  'eingespielt_2', 'eingespielt_3', 'streak_master_2', 'streak_master_3',
+  'allrounder_1', 'allrounder_2', 'allrounder_3', 'knapper_sieg',
 ]);
 
 export function isScoredMatch(match: Match): boolean {
@@ -101,10 +102,14 @@ export function rebuildLocalStatistics(players: Player[], matches: Match[], tour
       if (played >= 25) badges.add('stammgast_2');
       if (played >= 50) badges.add('stammgast_3');
       if (p.wins1v1 + p.wins2v2 >= 5) badges.add('siegertyp_1');
+      if (p.wins1v1 + p.wins2v2 >= 25) badges.add('siegertyp_2');
+      if (p.wins1v1 + p.wins2v2 >= 50) badges.add('siegertyp_3');
       if (p.currentStreak >= 5) badges.add('streak_master');
       if (p.currentStreak >= 10) badges.add('streak_master_2');
       if (p.currentStreak >= 15) badges.add('streak_master_3');
       if (p.wins1v1 >= 5 && p.wins2v2 >= 5) badges.add('allrounder_1');
+      if (p.wins1v1 >= 10 && p.wins2v2 >= 10) badges.add('allrounder_2');
+      if (p.wins1v1 >= 25 && p.wins2v2 >= 25) badges.add('allrounder_3');
       if (won && Math.abs(match.scoreA - match.scoreB) === 1) badges.add('knapper_sieg');
       if (Math.max(p.elo1v1, p.elo2v2) > 1500) badges.add('legend_1500');
       if (won && Math.max(match.scoreA, match.scoreB) === 10 && Math.min(match.scoreA, match.scoreB) <= 1) badges.add('clean_sheet');

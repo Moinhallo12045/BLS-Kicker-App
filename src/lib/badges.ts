@@ -30,6 +30,20 @@ export const ALL_BADGES: Badge[] = [
     tier: 'bronze',
   },
   {
+    id: 'siegertyp_2',
+    title: 'Siegertyp II',
+    description: '25 Ligaspiele gewonnen',
+    icon: '🏆',
+    tier: 'silver',
+  },
+  {
+    id: 'siegertyp_3',
+    title: 'Siegertyp III',
+    description: '50 Ligaspiele gewonnen',
+    icon: '🏆',
+    tier: 'gold',
+  },
+  {
     id: 'revanche',
     title: 'Revanche',
     description: 'Gegen einen Gegner gewonnen, gegen den zuvor verloren wurde',
@@ -80,10 +94,24 @@ export const ALL_BADGES: Badge[] = [
   },
   {
     id: 'allrounder_1',
-    title: 'Allrounder',
+    title: 'Allrounder I',
     description: 'Je 5 Ligaspiele im Einzel und Doppel gewonnen',
     icon: '🎯',
+    tier: 'bronze',
+  },
+  {
+    id: 'allrounder_2',
+    title: 'Allrounder II',
+    description: 'Je 10 Ligaspiele im Einzel und Doppel gewonnen',
+    icon: '🎯',
     tier: 'silver',
+  },
+  {
+    id: 'allrounder_3',
+    title: 'Allrounder III',
+    description: 'Je 25 Ligaspiele im Einzel und Doppel gewonnen',
+    icon: '🎯',
+    tier: 'gold',
   },
   {
     id: 'knapper_sieg',
@@ -94,7 +122,7 @@ export const ALL_BADGES: Badge[] = [
   },
   {
     id: 'clean_sheet',
-    title: 'Krabbeln',
+    title: 'Ich will sie krabbeln sehen',
     description: 'Ein Spiel mit 10:0 oder 10:1 gewonnen',
     icon: '🛡️',
     tier: 'gold',

@@ -52,8 +52,9 @@ test('expanded match achievements award cumulative tiers and revoke after correc
   }
   const result=rebuildLocalStatistics(players,matches,[]);
   const earned=result.players.find(p=>p.id==='a').badges;
-  for(const badge of ['stammgast_1','stammgast_2','stammgast_3','streak_master','streak_master_2',
-    'streak_master_3','allrounder_1','knapper_sieg','eingespielt_1','eingespielt_2','eingespielt_3']){
+  for(const badge of ['stammgast_1','stammgast_2','stammgast_3','siegertyp_1','siegertyp_2',
+    'siegertyp_3','streak_master','streak_master_2','streak_master_3','allrounder_1',
+    'allrounder_2','allrounder_3','knapper_sieg','eingespielt_1','eingespielt_2','eingespielt_3']){
     assert.ok(earned.includes(badge),`${badge} awarded`);
   }
   const corrected=rebuildLocalStatistics(players,matches.map(m=>({...m,scoreB:5})),[]);
@@ -61,8 +62,12 @@ test('expanded match achievements award cumulative tiers and revoke after correc
   const cancelled=rebuildLocalStatistics(players,matches.map(m=>m.mode==='2v2'?{...m,status:'cancelled',resultApplied:false}:m),[]);
   const remaining=cancelled.players.find(p=>p.id==='a').badges;
   assert.ok(!remaining.includes('allrounder_1'));
+  assert.ok(!remaining.includes('allrounder_2'));
+  assert.ok(!remaining.includes('allrounder_3'));
   assert.ok(!remaining.includes('eingespielt_1'));
   assert.ok(!remaining.includes('stammgast_3'));
+  assert.ok(remaining.includes('siegertyp_2'));
+  assert.ok(!remaining.includes('siegertyp_3'));
   assert.ok(remaining.includes('streak_master_2'));
   assert.ok(remaining.includes('streak_master_3'));
 });

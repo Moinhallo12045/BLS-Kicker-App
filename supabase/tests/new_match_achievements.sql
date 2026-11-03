@@ -24,8 +24,9 @@ $$;
 RESET ROLE;
 
 SELECT public.test_assert(
-  badges @> '["stammgast_1","stammgast_2","stammgast_3","siegertyp_1",
-    "streak_master","streak_master_2","streak_master_3","allrounder_1","knapper_sieg"]'::JSONB,
+  badges @> '["stammgast_1","stammgast_2","stammgast_3","siegertyp_1","siegertyp_2",
+    "siegertyp_3","streak_master","streak_master_2","streak_master_3","allrounder_1",
+    "allrounder_2","allrounder_3","knapper_sieg"]'::JSONB,
   'played-game, win, streak, all-rounder and narrow-win badges awarded')
 FROM public.profiles WHERE right(id::TEXT,1)='1';
 SELECT public.test_assert(badges @> '["eingespielt_1","eingespielt_2","eingespielt_3"]'::JSONB,
@@ -56,14 +57,17 @@ WHERE result_applied AND mode='2v2';
 SELECT set_config('app.server_operation','',true);
 SELECT public.test_assert(
   NOT badges ? 'allrounder_1' AND NOT badges ? 'eingespielt_1'
+    AND NOT badges ? 'allrounder_2' AND NOT badges ? 'allrounder_3'
     AND NOT badges ? 'eingespielt_2' AND NOT badges ? 'eingespielt_3'
     AND NOT badges ? 'stammgast_3' AND badges ? 'stammgast_2'
+    AND badges ? 'siegertyp_2' AND NOT badges ? 'siegertyp_3'
     AND badges ? 'streak_master_3',
   'cancelling doubles revokes pair/all-rounder/participation tiers while keeping supported streak')
 FROM public.profiles WHERE right(id::TEXT,1)='1';
 SELECT public.rebuild_match_stats();
 SELECT public.test_assert(NOT badges ? 'knapper_sieg' AND NOT badges ? 'allrounder_1'
-  AND badges ? 'stammgast_2','corrected achievements remain deterministic on repeated replay')
+  AND badges ? 'stammgast_2' AND badges ? 'siegertyp_2'
+  ,'corrected achievements remain deterministic on repeated replay')
 FROM public.profiles WHERE right(id::TEXT,1)='1';
 ROLLBACK;
 
