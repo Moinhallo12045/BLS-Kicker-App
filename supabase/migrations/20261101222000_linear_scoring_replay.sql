@@ -86,9 +86,9 @@ BEGIN
   PERFORM pg_advisory_xact_lock(20261101,210000);
   PERFORM set_config('app.server_operation','true',true);
   PERFORM set_config('app.replaying','true',true);
-  DELETE FROM public.scoring_losses WHERE TRUE;
-  DELETE FROM public.scoring_partner_wins WHERE TRUE;
-  DELETE FROM public.scoring_history WHERE TRUE;
+  DELETE FROM public.scoring_losses WHERE player_id IS NOT NULL;
+  DELETE FROM public.scoring_partner_wins WHERE player_id IS NOT NULL;
+  DELETE FROM public.scoring_history WHERE match_id IS NOT NULL;
   UPDATE public.profiles p SET elo_1v1=1000,elo_2v2=1000,elo_total=1000,league_points=0,
     wins_1v1=0,losses_1v1=0,wins_2v2=0,losses_2v2=0,current_streak=0,xp=0,level=1,
     xp_next_level=150,elo_history='[]',best_rank=999,badges=(
