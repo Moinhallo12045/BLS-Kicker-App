@@ -179,7 +179,7 @@ SELECT public.test_assert(
     AND current_streak = 0 AND elo_history = '[]'::jsonb),
   'bulk deletion of all scored games resets every statistic')
 FROM public.profiles;
-DELETE FROM public.matches;
+DELETE FROM public.matches WHERE TRUE;
 DELETE FROM public.matches WHERE FALSE;
 SELECT public.rebuild_match_stats();
 SELECT public.test_assert(bool_and(xp = 0 AND level = 1 AND elo_total = 1000),
@@ -209,7 +209,7 @@ SELECT public.test_assert(level = 2 AND xp = 0 AND xp_next_level = 150
   AND current_streak = 2 AND wins_1v1 = 2 AND elo_1v1 = 1031,
   'bulk removal across level cap restores lower level and XP exactly')
 FROM public.profiles WHERE right(id::TEXT, 1) = '1';
-DELETE FROM public.matches;
+DELETE FROM public.matches WHERE TRUE;
 UPDATE public.profiles SET elo_1v1 = 100;
 SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', true);
 SELECT public.submit_match_result('1v1',
@@ -217,7 +217,7 @@ SELECT public.submit_match_result('1v1',
   ARRAY['00000000-0000-0000-0000-000000000002']::UUID[], 10, 0);
 SELECT public.test_assert(elo_1v1 = 100, 'submission preserves ELO floor')
 FROM public.profiles WHERE right(id::TEXT, 1) = '2';
-DELETE FROM public.matches;
+DELETE FROM public.matches WHERE TRUE;
 SELECT public.test_assert(bool_and(elo_1v1 = 1000), 'deletion replaces clamped ratings with baseline')
 FROM public.profiles;
 INSERT INTO public.matches (id, mode, team_a, team_b, score_a, score_b, status, result_applied, created_at)

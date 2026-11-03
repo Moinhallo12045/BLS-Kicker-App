@@ -1,7 +1,7 @@
 \set ON_ERROR_STOP on
 
 SELECT set_config('app.server_operation', 'true', false);
-DELETE FROM public.matches;
+DELETE FROM public.matches WHERE TRUE;
 UPDATE public.profiles
 SET best_rank = 1,
     badges = '["stammgast_1","siegertyp_1","revanche","eingespielt_1","streak_master","clean_sheet","legend_1500","turnier_champ","manual"]'::jsonb;
@@ -108,7 +108,7 @@ SELECT public.rebuild_match_stats();
 SELECT public.test_assert(bool_and(p.badges = b.badges AND p.best_rank = b.best_rank),
   'achievement replay is deterministic')
 FROM public.profiles p JOIN achievements_before_replay b USING (id);
-DELETE FROM public.matches;
+DELETE FROM public.matches WHERE TRUE;
 SELECT public.test_assert(bool_and(
   best_rank = 999 AND badges @> '["manual","turnier_champ"]'::jsonb AND jsonb_array_length(badges) = 2
 ), 'delete-all clears match achievements without altering independent badges')

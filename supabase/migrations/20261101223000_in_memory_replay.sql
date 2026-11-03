@@ -124,7 +124,9 @@ DECLARE game public.matches; p public.profiles; states JSONB := '{}'; losses JSO
 BEGIN
   PERFORM pg_advisory_xact_lock(20261101,210000);
   PERFORM set_config('app.server_operation','true',true);
-  DELETE FROM public.scoring_losses; DELETE FROM public.scoring_partner_wins; DELETE FROM public.scoring_history;
+  DELETE FROM public.scoring_losses WHERE TRUE;
+  DELETE FROM public.scoring_partner_wins WHERE TRUE;
+  DELETE FROM public.scoring_history WHERE TRUE;
   FOR p IN SELECT * FROM public.profiles ORDER BY id LOOP
     p.elo_1v1:=1000;p.elo_2v2:=1000;p.elo_total:=1000;p.league_points:=0;
     p.wins_1v1:=0;p.losses_1v1:=0;p.wins_2v2:=0;p.losses_2v2:=0;p.current_streak:=0;
