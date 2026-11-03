@@ -79,7 +79,7 @@ export function isQualified(player: Player): boolean {
 }
 
 export function getQualifiedByElo(players: Player[]): Player[] {
-  return qualifiedPlayers(players);
+  return qualifiedPlayers(players.filter((p) => !p.isDeleted));
 }
 
 /** Rank in the ELO ladder, or null when the player is not (yet) qualified. */

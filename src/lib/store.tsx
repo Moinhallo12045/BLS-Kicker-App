@@ -16,7 +16,7 @@ interface ProfileRow {
   level: number; xp: number; xp_next_level: number; elo_1v1: number; elo_2v2: number;
   elo_total: number; league_points: number; wins_1v1: number; losses_1v1: number;
   wins_2v2: number; losses_2v2: number; current_streak: number; best_rank: number;
-  role: PlayerRole; is_suspended: boolean; badges: string[]; elo_history: Player['eloHistory'];
+  role: PlayerRole; is_suspended: boolean; is_deleted: boolean; badges: string[]; elo_history: Player['eloHistory'];
 }
 type ProfileLookup = ProfileRow | {id: null} | null;
 // A scalar composite RPC can return an object with null fields when no row exists.
@@ -76,7 +76,7 @@ interface StoreContextType {
 }
 const StoreContext = createContext<StoreContextType | null>(null);
 const STORAGE_KEY = 'bls_kicker_app_state_v5';
-const PROFILE_COLUMNS = 'id,name,avatar,year_joined,is_external,level,xp,xp_next_level,elo_1v1,elo_2v2,elo_total,league_points,wins_1v1,losses_1v1,wins_2v2,losses_2v2,current_streak,best_rank,role,is_suspended,badges,elo_history,created_at,updated_at';
+const PROFILE_COLUMNS = 'id,name,avatar,year_joined,is_external,level,xp,xp_next_level,elo_1v1,elo_2v2,elo_total,league_points,wins_1v1,losses_1v1,wins_2v2,losses_2v2,current_streak,best_rank,role,is_suspended,is_deleted,badges,elo_history,created_at,updated_at';
 const failure = (message: string): ActionResult => ({ success: false, message });
 const success = (message: string): ActionResult => ({ success: true, message });
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Die Anfrage ist fehlgeschlagen.';
@@ -87,7 +87,7 @@ const profileToPlayer = (p: ProfileRow): Player => ({
   elo1v1: p.elo_1v1, elo2v2: p.elo_2v2, eloTotal: p.elo_total,
   leaguePoints: p.league_points, wins1v1: p.wins_1v1, losses1v1: p.losses_1v1,
   wins2v2: p.wins_2v2, losses2v2: p.losses_2v2, currentStreak: p.current_streak,
-  bestRank: p.best_rank, role: p.role, isSuspended: p.is_suspended,
+  bestRank: p.best_rank, role: p.role, isSuspended: p.is_suspended, isDeleted: Boolean(p.is_deleted),
   badges: p.badges || [], eloHistory: p.elo_history || [],
 });
 const matchToMatch = (m: MatchRow): Match => ({
@@ -437,6 +437,7 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
     return success('Profil erfolgreich erstellt.');
   };
   const updatePlayerRole = async (id: string, role: PlayerRole) => {
+    if (players.find((p) => p.id === id)?.isDeleted) return failure('Gelöschte Spieler können nicht reaktiviert werden.');
     if (supabase) return rpcAction('set_player_role', {p_player_id: id, p_role: role}, 'Rolle aktualisiert.');
     if (!currentUser || !['owner', 'co_owner'].includes(currentUser.role)) return failure('Keine Berechtigung.');
     const target = players.find((p) => p.id === id);
@@ -444,6 +445,7 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
     setPlayers((prev) => prev.map((p) => p.id === id ? {...p, role} : p)); return success('Rolle aktualisiert.');
   };
   const setPlayerSuspension = async (id: string, suspended: boolean) => {
+    if (players.find((p) => p.id === id)?.isDeleted) return failure('Gelöschte Spieler können nicht reaktiviert werden.');
     if (supabase) return rpcAction('set_player_suspension', {p_player_id: id, p_suspended: suspended}, 'Sperrstatus aktualisiert.');
     if (!isAdmin || id === currentUser?.id || players.find((p) => p.id === id)?.role === 'owner') return failure('Diese Sperränderung ist nicht erlaubt.');
     setPlayers((prev) => prev.map((p) => p.id === id ? {...p, isSuspended: suspended} : p)); return success('Sperrstatus aktualisiert.');
@@ -479,20 +481,13 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
       return failure('Der eigene Account und Owner-Profile dürfen nicht gelöscht werden.');
     }
     if (supabase) return rpcAction('delete_player', {p_player_id: id}, 'Spieler gelöscht.');
-    if (stateRef.current.matches.some((m) => [...m.teamA, ...m.teamB, ...m.confirmedBy].includes(id)
-      || m.creatorId === id || m.disputedBy === id || m.disputeProposedBy === id || m.cancellationRequestedBy === id)
-      || stateRef.current.tournaments.some((t) => t.participants.includes(id) || t.winnerId === id
-        || t.teams?.some((team) => team.playerIds.includes(id))
-        || t.matches.some((m) => m.playerAId === id || m.playerBId === id || m.winnerId === id))) {
-      return failure('Spieler mit verknüpften Spielen oder Turnieren können nicht gelöscht werden.');
-    }
-    if (inviteCodes.some((code) => code.createdBy === id) || whitelist.some((entry) => entry.addedBy === id)) {
-      return failure('Spieler mit verknüpften Einladungscodes oder Whitelist-Einträgen können nicht gelöscht werden.');
-    }
-    const remaining = stateRef.current.players.filter((p) => p.id !== id);
+    const remaining = stateRef.current.players.map((p): Player => p.id === id
+      ? {...p, isDeleted: true, isSuspended: true, role: 'player', name: `Gelöschter Spieler ${id}`,
+        avatar: '⚽', email: '', yearJoined: null, isExternal: false}
+      : p);
     stateRef.current = {...stateRef.current, players: remaining};
     setPlayers(remaining);
-    return success('Spieler lokal gelöscht.');
+    return success('Spieler gelöscht; die Spielhistorie bleibt erhalten.');
   };
   const createTournament = async (params: TournamentParams) => {
     if (!canManage) return failure('Nur Turnierleitung und Administration können Turniere erstellen.');

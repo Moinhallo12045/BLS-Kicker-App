@@ -23,6 +23,7 @@ SELECT set_config('app.server_operation','',false);
 \ir ../migrations/20261103183000_fix_unconditional_stats_delete.sql
 \ir ../migrations/20261103190000_repair_legacy_stats_deletes.sql
 \ir ../migrations/20261103200000_owner_co_owner_delete_players.sql
+\ir ../migrations/20261103203000_delete_players_with_history.sql
 DO $$
 DECLARE p public.profiles;
 BEGIN

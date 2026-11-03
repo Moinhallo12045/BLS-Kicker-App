@@ -127,7 +127,7 @@ export function Navigation({
                     onChange={(e) => switchUser(e.target.value)}
                     className="bg-transparent text-amber-300 font-semibold text-xs focus:outline-none cursor-pointer"
                   >
-                    {players.map((p) => (
+                    {players.filter((p) => !p.isSuspended).map((p) => (
                       <option key={p.id} value={p.id} className="bg-slate-900 text-white">
                         {p.name} (Lvl {p.level})
                       </option>

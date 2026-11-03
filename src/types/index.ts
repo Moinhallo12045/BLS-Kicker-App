@@ -23,6 +23,7 @@ export interface Player {
   bestRank: number;
   role: PlayerRole;
   isSuspended?: boolean;
+  isDeleted?: boolean;
   badges: string[]; // badge IDs
   eloHistory: { date: string; elo: number }[];
 }

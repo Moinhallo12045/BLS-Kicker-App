@@ -60,7 +60,8 @@ interface DashboardViewProps {
 
 export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardViewProps) {
   const { selectTab } = useAppNavigation();
-  const { currentUser, players, matches, tournaments, quests } = useStore();
+  const { currentUser, players: allPlayers, matches, tournaments, quests } = useStore();
+  const players = allPlayers.filter((p) => !p.isDeleted);
   const [eloRange, setEloRange] = useState<EloRange>('all');
   const gradientId = useId().replace(/:/g, '');
 
@@ -71,7 +72,7 @@ export function DashboardView({ onOpenMatchEntry, onNavigateToTab }: DashboardVi
   const myGames = gamesPlayed(currentUser);
   const tier = getTierForLevel(currentUser.level);
   const top5 = qualified.slice(0, 5);
-  const weeklyCrawlers = computeWeeklyCrawlers(matches);
+  const weeklyCrawlers = computeWeeklyCrawlers(matches).filter((entry) => players.some((p) => p.id === entry.playerId));
 
   // XP Progress Percentage
   const isMaxLevel = currentUser.level >= MAX_LEVEL;

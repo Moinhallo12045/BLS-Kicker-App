@@ -443,15 +443,15 @@ export function AdminView() {
       <section className="felt-card p-4 sm:p-5 space-y-4">
         <h3 className="font-display text-lg font-bold text-white flex items-center gap-2">
           <Users className="w-5 h-5 text-amber-400" />
-          Spieler-Rollen ({players.length} Spieler)
+          Spieler-Rollen ({players.filter((p) => !p.isDeleted).length} Spieler)
         </h3>
         <p className="text-[11px] text-emerald-300/80">
-          Owner und Co-Owner können Spieler ohne verknüpfte Spiele oder Turniere löschen.
-          Der eigene Account und Owner-Profile sind geschützt.
+          Owner und Co-Owner können Spieler auch mit Historie löschen. Das Profil wird
+          anonymisiert und deaktiviert; Ergebnisse bleiben erhalten. Eigener Account und Owner-Profile sind geschützt.
         </p>
 
         <div className="max-h-[28rem] overflow-y-auto overscroll-contain space-y-1.5 pr-1">
-          {players.map((p) => {
+          {players.filter((p) => !p.isDeleted).map((p) => {
             const roles = assignableRoles(currentUser, p);
             const roleEditable = roles.length > 0;
             const suspendable = canSuspend(currentUser, p);
@@ -532,7 +532,7 @@ export function AdminView() {
                       disabled={Boolean(busyKey)}
                       aria-label={`${p.name} löschen`}
                       onClick={() => {
-                        if (!window.confirm(`${p.name} dauerhaft löschen? Diese Aktion kann nicht rückgängig gemacht werden.`)) return;
+                        if (!window.confirm(`${p.name} dauerhaft löschen und anonymisieren? Frühere Spiele und Ergebnisse bleiben erhalten. Diese Aktion kann nicht rückgängig gemacht werden.`)) return;
                         void perform(deleteKey, () => deletePlayer(p.id), 'Spieler konnte nicht gelöscht werden.');
                       }}
                       className="min-h-[44px] rounded-lg px-3 text-[11px] font-bold flex items-center gap-1 bg-red-900/40 text-red-300 disabled:opacity-50"

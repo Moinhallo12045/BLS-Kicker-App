@@ -32,7 +32,7 @@ function row(p) {
     level:p.level,xp:p.xp,xp_next_level:p.xpNextLevel,elo_1v1:p.elo1v1,elo_2v2:p.elo2v2,
     elo_total:p.eloTotal,league_points:p.leaguePoints,wins_1v1:p.wins1v1,losses_1v1:p.losses1v1,
     wins_2v2:p.wins2v2,losses_2v2:p.losses2v2,current_streak:p.currentStreak,best_rank:p.bestRank,
-    role:p.role,is_suspended:false,badges:[],elo_history:[]};
+    role:p.role,is_suspended:Boolean(p.isSuspended),is_deleted:Boolean(p.isDeleted),badges:[],elo_history:[]};
 }
 test('offline mutual cancellation requires opponent and rebuilds final statistics', async()=>{
   const h=harness(null,{players:[player('a'),player('b')],matches:[],tournaments:[],currentUserId:'a'});
@@ -64,11 +64,11 @@ test('offline player deletion allows owner and co-owner but protects self and ow
     const result=await h.render().deletePlayer('target');
     const allowed=['owner','co_owner'].includes(role);
     assert.equal(result.success,allowed);
-    assert.equal(h.render().players.some(p=>p.id==='target'),!allowed);
+    assert.equal(Boolean(h.render().players.find(p=>p.id==='target').isDeleted),allowed);
     assert.equal(h.render().currentUser.id,'actor');
   }
 });
-test('offline player deletion retains players referenced by matches or tournaments', async()=>{
+test('offline player deletion anonymizes historical players without changing results', async()=>{
   const match={id:'game',mode:'1v1',teamA:['actor'],teamB:['target'],scoreA:10,scoreB:5,
     creatorId:'actor',confirmedBy:[],status:'cancelled',resultApplied:false,date:'2026-11-03'};
   for(const data of [
@@ -79,15 +79,22 @@ test('offline player deletion retains players referenced by matches or tournamen
     const h=harness(null,{players:[player('actor','co_owner'),player('target')],currentUserId:'actor',...data});
     await h.hydrate();
     const result=await h.render().deletePlayer('target');
-    assert.equal(result.success,false);
-    assert.match(result.message,/verknüpften Spielen oder Turnieren/);
+    assert.equal(result.success,true);
+    const deleted=h.render().players.find(p=>p.id==='target');
+    assert.equal(deleted.isDeleted,true);
+    assert.equal(deleted.isSuspended,true);
+    assert.equal(deleted.email,'');
+    assert.match(deleted.name,/Gelöschter Spieler/);
     assert.equal(h.render().players.length,2);
+    assert.equal(h.render().matches.length,data.matches.length);
+    assert.equal(h.render().tournaments.length,data.tournaments.length);
+    assert.equal((await h.render().setPlayerSuspension('target',false)).success,false);
+    assert.equal(h.render().loginPlayer(deleted.name).success,false);
   }
 });
 test('connected player deletion uses the authorized RPC and retains state on failure', async()=>{
   for(const denied of [false,true]){
     const actor=row(player('actor','co_owner')),target=row(player('target'));
-    let deleted=false;
     const calls=[];
     const client={
       auth:{getSession:async()=>({data:{session:{user:{id:'actor'}}},error:null}),
@@ -95,10 +102,10 @@ test('connected player deletion uses the authorized RPC and retains state on fai
       rpc:(name,params)=>{
         if(name==='get_my_profile')return builder({data:actor,error:null});
         calls.push({name,params});
-        if(!denied)deleted=true;
+        if(!denied){target.is_deleted=true;target.is_suspended=true;target.name='Gelöschter Spieler target';}
         return builder({data:null,error:denied?{message:'Deletion denied'}:null});
       },
-      from:(table)=>builder({data:table==='profiles'?(deleted?[actor]:[actor,target]):[],error:null}),
+      from:(table)=>builder({data:table==='profiles'?[actor,target]:[],error:null}),
     };
     const h=harness(client);await h.hydrate();
     const result=await h.render().deletePlayer('target');
@@ -106,9 +113,27 @@ test('connected player deletion uses the authorized RPC and retains state on fai
     assert.equal(calls.length,1);
     assert.equal(calls[0].name,'delete_player');
     assert.equal(calls[0].params.p_player_id,'target');
-    assert.equal(h.render().players.some(p=>p.id==='target'),denied);
+    assert.equal(h.render().players.find(p=>p.id==='target').isDeleted,!denied);
     if(denied)assert.match(result.message,/Deletion denied/);
   }
+});
+test('deleting a scored opponent preserves replay and removes them from the current ranking', async()=>{
+  const h=harness(null,{players:[player('actor','owner'),player('target')],matches:[],
+    tournaments:[],currentUserId:'actor'});
+  await h.hydrate();
+  for(let i=0;i<3;i++){
+    assert.equal((await h.render().submitMatch({mode:'1v1',teamA:['actor'],teamB:['target'],scoreA:10,scoreB:5})).success,true);
+  }
+  const before=h.render().players.find(p=>p.id==='actor');
+  assert.equal((await h.render().deletePlayer('target')).success,true);
+  const api=h.render();
+  assert.equal(api.matches.length,3);
+  assert.equal(api.players.find(p=>p.id==='actor').eloTotal,before.eloTotal);
+  const {getQualifiedByElo}=loadTypeScript('src/lib/matchViews.ts',{'@/lib/store':{useStore:()=>api}});
+  assert.deepEqual(Array.from(getQualifiedByElo(api.players),p=>p.id),['actor']);
+  assert.equal((await api.acknowledgeMatch(api.matches[0].id)).success,true);
+  assert.equal(h.render().players.find(p=>p.id==='actor').eloTotal,before.eloTotal);
+  assert.equal(h.render().players.find(p=>p.id==='target').isDeleted,true);
 });
 test('admin deletion controls are limited to owner and co-owner and require confirmation', async()=>{
   for(const role of ['owner','co_owner','admin']){
@@ -123,7 +148,7 @@ test('admin deletion controls are limited to owner and co-owner and require conf
     };
     const {AdminView}=loadTypeScript('src/components/AdminView.tsx',{
       react,'@/lib/store':{useStore:()=>({
-        currentUser:actor,players:[actor,target,owner],matches:[],inviteCodes:[],whitelist:[],
+        currentUser:actor,players:[actor,target,owner,{...player('deleted'),isDeleted:true,isSuspended:true}],matches:[],inviteCodes:[],whitelist:[],
         deletePlayer:async id=>{deleted.push(id);return {success:true,message:'Gelöscht'};},
       })},
     },{window:{confirm:()=>confirmed},setTimeout:()=>0,clearTimeout:()=>{}});
