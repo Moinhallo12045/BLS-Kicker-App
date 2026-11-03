@@ -16,6 +16,8 @@ import { LevelUpModal } from '@/components/LevelUpModal';
 import { AuthLandingView } from '@/components/AuthLandingView';
 import { useStore } from '@/lib/store';
 import { isAdminRole, useSyncState } from '@/lib/matchViews';
+import { AppNavigation, useAppNavigation } from '@/components/AppNavigation';
+import { MatchDetailView, PlayerDetailView } from '@/components/DetailViews';
 
 function SyncErrorBanner() {
   const { syncError, refreshState } = useSyncState();
@@ -63,9 +65,14 @@ function SyncErrorBanner() {
 }
 
 export default function Home() {
+  return <AppNavigation><AppContent /></AppNavigation>;
+}
+
+function AppContent() {
   const { currentUser } = useStore();
   const { isLoading } = useSyncState();
-  const [currentTab, setCurrentTab] = useState<TabType>('dashboard');
+  const { location, selectTab: setCurrentTab } = useAppNavigation();
+  const currentTab = location.tab;
   const [isMatchEntryOpen, setIsMatchEntryOpen] = useState(false);
   const [isConfirmationOpen, setIsConfirmationOpen] = useState(false);
 
@@ -103,20 +110,24 @@ export default function Home() {
       )}
 
       <div className="flex-1 max-w-4xl w-full mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-bottom-nav">
-        {activeTab === 'dashboard' && (
-          <DashboardView
-            onOpenMatchEntry={() => setIsMatchEntryOpen(true)}
-            onNavigateToTab={(tab: TabType) => setCurrentTab(tab)}
-          />
-        )}
-        {activeTab === 'ranking' && <RankingView />}
-        {activeTab === 'matches' && (
-          <MatchesView onOpenMatchEntry={() => setIsMatchEntryOpen(true)} />
-        )}
-        {activeTab === 'tournaments' && <TournamentView />}
-        {activeTab === 'players' && <PlayersView />}
-        {activeTab === 'profile' && <ProfileView />}
-        {activeTab === 'admin' && isAdmin && <AdminView />}
+        <div hidden={Boolean(location.playerId || location.matchId)}>
+          <div hidden={activeTab !== 'dashboard'}>
+            <DashboardView
+              onOpenMatchEntry={() => setIsMatchEntryOpen(true)}
+              onNavigateToTab={(tab: TabType) => setCurrentTab(tab)}
+            />
+          </div>
+          <div hidden={activeTab !== 'ranking'}><RankingView /></div>
+          <div hidden={activeTab !== 'matches'}>
+            <MatchesView onOpenMatchEntry={() => setIsMatchEntryOpen(true)} />
+          </div>
+          <div hidden={activeTab !== 'tournaments'}><TournamentView /></div>
+          <div hidden={activeTab !== 'players'}><PlayersView /></div>
+          <div hidden={activeTab !== 'profile'}><ProfileView /></div>
+          {activeTab === 'admin' && isAdmin && <AdminView />}
+        </div>
+        {location.playerId && <PlayerDetailView key={location.playerId} playerId={location.playerId} onOpenMatchEntry={() => setIsMatchEntryOpen(true)} />}
+        {location.matchId && <MatchDetailView key={location.matchId} matchId={location.matchId} onOpenMatchEntry={() => setIsMatchEntryOpen(true)} />}
       </div>
 
       <MatchEntryModal

@@ -19,10 +19,12 @@ Eine moderne, hochwertige und mobiloptimierte Web-App (PWA) für geschlossene Ti
    - Filter nach **Elo**, **Wochenzocker**, **Level**, **Aktivität**, **Einzel (1v1)** und **Doppel (2v2)**
    - Medaillen im Lorbeerkranz-Design (Gold, Silber, Bronze, Smaragd)
    - Anzeige des frei wählbaren Uni-Jahrgangs, Siegesserien-Flammen (🔥) und ELO-Gewinn
-   - **Krabbler-der-Woche-Leaderboard** für 0:…-Niederlagen der laufenden Woche
+   - **Krabbler-der-Woche-Leaderboard** als eigener Ranglistenfilter, direkt vom Dashboard erreichbar: gewertete Zu-null-Niederlagen seit Montag (UTC), auch ohne drei Qualifikationsspiele; sortiert nach Anzahl und höchster Niederlage.
    - Spezieller Bereich *"Neu dabei – In der Elo-Rangliste ab 3 Spielen"* für Einsteiger
 
 3. **Spieleintrags- & Widerspruchsworkflow**:
+   - Spieleliste mit kombinierbaren Filtern für **Alle / Meine Spiele**, Einzel / Doppel und Status.
+   - Eigene Spielinformationsseiten mit Mannschaften, Ergebnis, Wertungsstatus, Elo-Änderungen, Ersteller, Gesehen-Markierungen und vorhandenen Klärungsaktionen.
    - Umschalten zwischen **1 gegen 1** und **2 gegen 2**
    - Interaktive Teamauswahl (*Ich*, *+ Partner*, *+ Gegner 1*, *+ Gegner 2*)
    - Spieler-Schnellauswahl mit Suchfeld
@@ -41,6 +43,7 @@ Eine moderne, hochwertige und mobiloptimierte Web-App (PWA) für geschlossene Ti
 
 5. **Spieler-Community & Head-to-Head Duelle**:
    - Spieler-Verzeichnis mit Suche nach Namen
+   - Spielerprofile mit Elo-Werten, Qualifikationsstatus, Level, Abzeichen, Elo-Verlauf und verlinkter Spielhistorie; keine E-Mail-Adressen oder Kontofunktionen in fremden Profilen.
    - Direkter Duell-Vergleich (*Head-to-Head*): Bilanz zweier Spieler, gemeinsame Spiele und Tore.
 
 6. **Geschlossenes Registrierungs- & Rechtesystem**:
@@ -54,6 +57,20 @@ Eine moderne, hochwertige und mobiloptimierte Web-App (PWA) für geschlossene Ti
    - **Player**: eigene Profil- und Spielfunktionen.
 
 ---
+
+### Navigation
+
+Die untere Leiste ist auf Smartphone und Desktop die zentrale Bereichsnavigation:
+**Start · Rangliste · + Spiel · Spiele · Mehr**. Unter **Mehr** liegen Spieler,
+Turniere, Mein Profil und (mit passenden Rechten) Verwaltung. Die Glocke im
+Kopfbereich öffnet weiterhin neue Ergebnisse und Klärungsanfragen.
+
+Bereiche, Ranglistenfilter, Spielerprofile und Spielinformationen sind über
+URL-Fragmente direkt aufrufbar (z. B. `#tab=ranking&ranking=krabbler` oder
+`#tab=players&player=SPIELER_ID`). Das funktioniert auch beim statischen Export.
+Browser-Zurück und der Zurück-Link in Details stellen die vorherige Ansicht
+einschließlich Suche, Spiel- und Vergleichsfiltern sowie Scrollposition innerhalb
+der laufenden Sitzung wieder her. Direkte Links erfordern weiterhin eine Anmeldung.
 
 ## 🛠️ Technologie-Stack (100% Kostenlos)
 

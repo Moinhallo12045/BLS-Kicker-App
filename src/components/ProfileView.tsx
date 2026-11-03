@@ -9,8 +9,10 @@ import { Award, Flame, RefreshCw, LogOut, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { MAX_LEVEL, MIN_RANKED_GAMES, formatBestRank, gamesPlayed, getLeagueRank, runAction } from '@/lib/matchViews';
 
-export function ProfileView() {
-  const { currentUser, players, resetToDefaultData, logout } = useStore();
+export function ProfileView({ playerId }: { playerId?: string }) {
+  const { currentUser: signedInUser, players, resetToDefaultData, logout } = useStore();
+  const currentUser = playerId ? players.find((player) => player.id === playerId) : signedInUser;
+  const isOwnAccount = !playerId;
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
 
@@ -70,7 +72,7 @@ export function ProfileView() {
               <h2 className="font-display text-2xl font-bold text-white break-words">
                 {currentUser.name}
               </h2>
-              {currentUser.role !== 'player' && (
+              {isOwnAccount && currentUser.role !== 'player' && (
                 <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold">
                   {roleLabel}
                 </span>
@@ -81,7 +83,7 @@ export function ProfileView() {
               {tier.tier} • {currentUser.isExternal ? <ExternalLabel /> : `Uni-Jahrgang ${currentUser.yearJoined}`} • ID: #{currentUser.id.slice(-6)}
             </p>
 
-            <div className="mt-3 flex items-center justify-center sm:justify-start gap-2 flex-wrap">
+            {isOwnAccount && <div className="mt-3 flex items-center justify-center sm:justify-start gap-2 flex-wrap">
               <button
                 type="button"
                 onClick={handleLogout}
@@ -91,7 +93,7 @@ export function ProfileView() {
                 {loggingOut ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
                 {loggingOut ? 'Wird abgemeldet…' : 'Abmelden'}
               </button>
-            </div>
+            </div>}
             {logoutError && (
               <p role="alert" className="mt-2 text-xs text-red-300 bg-red-950/60 border border-red-700/50 rounded-lg px-2 py-1.5">
                 {logoutError}
@@ -211,7 +213,7 @@ export function ProfileView() {
       </div>
 
       {/* Demo reset is only available offline; connected data must never be reset from the client. */}
-      {!supabase && (
+      {isOwnAccount && !supabase && (
       <div className="text-center pt-4">
         <button
           type="button"
