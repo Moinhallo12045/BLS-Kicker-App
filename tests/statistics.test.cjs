@@ -43,6 +43,34 @@ test('badges revoke when prerequisite games are removed', () => {
   assert.ok(!remaining.players[0].badges.includes('revanche'));
   assert.ok(remaining.players[0].badges.includes('clean_sheet'));
 });
+test('expanded match achievements award cumulative tiers and revoke after corrections', () => {
+  const players=['a','b','c','d'].map((id)=>player(id));
+  const matches=[];
+  for(let i=0;i<25;i++){
+    matches.push(game(`single-${String(i).padStart(2,'0')}`,['a'],['b'],10,i===0?9:5));
+    matches.push({...game(`double-${String(i).padStart(2,'0')}`,['a','c'],['b','d'],10,5),mode:'2v2'});
+  }
+  const result=rebuildLocalStatistics(players,matches,[]);
+  const earned=result.players.find(p=>p.id==='a').badges;
+  for(const badge of ['stammgast_1','stammgast_2','stammgast_3','siegertyp_1','siegertyp_2',
+    'siegertyp_3','streak_master','streak_master_2','streak_master_3','allrounder_1',
+    'allrounder_2','allrounder_3','knapper_sieg','eingespielt_1','eingespielt_2','eingespielt_3']){
+    assert.ok(earned.includes(badge),`${badge} awarded`);
+  }
+  const corrected=rebuildLocalStatistics(players,matches.map(m=>({...m,scoreB:5})),[]);
+  assert.ok(!corrected.players.find(p=>p.id==='a').badges.includes('knapper_sieg'));
+  const cancelled=rebuildLocalStatistics(players,matches.map(m=>m.mode==='2v2'?{...m,status:'cancelled',resultApplied:false}:m),[]);
+  const remaining=cancelled.players.find(p=>p.id==='a').badges;
+  assert.ok(!remaining.includes('allrounder_1'));
+  assert.ok(!remaining.includes('allrounder_2'));
+  assert.ok(!remaining.includes('allrounder_3'));
+  assert.ok(!remaining.includes('eingespielt_1'));
+  assert.ok(!remaining.includes('stammgast_3'));
+  assert.ok(remaining.includes('siegertyp_2'));
+  assert.ok(!remaining.includes('siegertyp_3'));
+  assert.ok(remaining.includes('streak_master_2'));
+  assert.ok(remaining.includes('streak_master_3'));
+});
 test('qualified ranking uses server tie ordering regardless of input order', () => {
   const older={...player('z'),createdAt:'2026-01-01T00:00:00Z',wins1v1:3};
   const newer={...player('a'),createdAt:'2026-02-01T00:00:00Z',wins1v1:3};
