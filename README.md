@@ -95,6 +95,7 @@ Die Hauptnavigation liegt am unteren Bildschirmrand; große Bedienelemente, Safe
 - Match-RPCs lehnen gesperrte Spieler, unbekannte Profile und doppelte Spieler-IDs in Teams serverseitig ab.
 - Profilanlage, Rollenwechsel, Sperren, Moderation und Turnierwertung laufen über autorisierte RPCs. Direkte Client-Schreibzugriffe können weder Statistikwerte noch Auth-Verknüpfung, Rolle oder Sperrstatus manipulieren.
 - Die Annullierung eines Ligaspiels durch einen Teilnehmer läuft grundsätzlich über gegenseitige Zustimmung; Owner, Co-Owner und Admins dürfen sie sofort ausführen. Beim anschließenden Statistik-Rebuild werden alle abgeleiteten Scoring-Datensätze mit explizit qualifizierten `DELETE`-Statements geleert.
+- Die Reparaturmigration `20261103190000_repair_legacy_stats_deletes.sql` aktualisiert auch bereits installierte Replay-Funktionen mit ursprünglichen `DELETE`-Statements ohne `WHERE` sowie mit der späteren `WHERE TRUE`-Variante. Das anschließende Update der Turnierabzeichen erhält ebenfalls eine explizite `WHERE`-Bedingung für Supabases Schutzprüfung.
 - Das Löschen von Spielerprofilen ist per RLS ausschließlich für Owner freigegeben und schützt den eigenen Account sowie alle Owner-Profile.
 - Öffentliche Profillisten enthalten keine E-Mail-Adressen oder Auth-Benutzer-IDs. Das eigene Profil wird über `get_my_profile()` bestimmt.
 - Ein Auth-Konto ist noch kein Spielerprofil: Erst das Absenden des Profilformulars legt über `create_player_profile` einen Eintrag in `public.profiles` an. Ein leeres Ergebnis von `get_my_profile()` (auch ein Objekt mit NULL-Feldern) wird nicht als Spieler übernommen; die Profileinrichtung bleibt verfügbar.
@@ -110,6 +111,8 @@ TEST_DATABASE_URL=postgresql://postgres@localhost:5432/regression bash scripts/t
 ```
 
 Der Runner prüft die historischen Statistik-Migrationen, den vollständigen aktuellen Stand und das Upgrade einer befüllten Datenbank in drei getrennten Datenbanken. Zwei zusätzliche Testdatenbanken werden angelegt und anschließend entfernt; die angegebene Datenbank muss ebenfalls wegwerfbar sein. Abgedeckt sind direkte Manipulationsversuche, Whitelist und Profilanlage, Rollen/Sperren, gegenseitige Annullierung, feste Doppelpaare, Turnierkorrekturen, Abzeichen und Replay-Parität. Ein Skalierungstest enthält 1.000 und 2.000 Spiele.
+
+`supabase/tests/legacy_stats_deletes.sql` prüft nach dem befüllten Upgrade die Reparatur ursprünglich installierter Replay-Funktionen, Admin-Annullierung und angenommene Ergebniskorrekturen. Ist `pg_safeupdate` installiert, aktiviert `psql -v test_safeupdate=1` für diesen Test zusätzlich die Schutzprüfung und reproduziert vor der Reparatur den ursprünglichen Fehler.
 
 Die Folgemigration `20261101213500_rebuild_match_achievements.sql` bereinigt zusätzlich die sieben spielabhängigen Abzeichen und die beste Platzierung. Beim chronologischen Neuaufbau werden erreichte Erfolge erneut vergeben; ein später verlorenes Spiel entfernt einen früher weiterhin belegten Erfolg nicht. Die beste Platzierung folgt der Gesamt-ELO-Rangliste ab drei Spielen. Turnier-Abzeichen und unbekannte/manuelle Abzeichen bleiben erhalten, ebenso persönliche Profildaten. Neue Spielwertungen aktualisieren diese Erfolge ebenfalls.
 

@@ -14,3 +14,4 @@ psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"$overhaul_dat
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -c "\\connect $overhaul_database" \
   -f supabase/tests/secure_tournaments.sql -f supabase/tests/tournament_brackets_replay.sql
 psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -c "\\connect $upgrade_database" -f supabase/tests/secure_upgrade.sql
+psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -c "\\connect $upgrade_database" -f supabase/tests/legacy_stats_deletes.sql
