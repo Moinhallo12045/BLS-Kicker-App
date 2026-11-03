@@ -7,6 +7,8 @@ import { rebuildLocalStatistics, weeklyQuests } from './statistics';
 import { createLocalTournament, resetLocalTournamentMatch, scoreLocalTournament } from './tournaments';
 import { MAX_SCORE } from './elo';
 import type { Session } from '@supabase/supabase-js';
+import type { AuditEntry } from '@/types/audit';
+import { friendlyError } from './feedback';
 
 export interface ActionResult { success: boolean; message: string }
 interface ProfileRow {
@@ -40,6 +42,11 @@ interface InviteRow {
   is_active: boolean; created_at: string;
 }
 interface WhitelistRow { id: string; pattern: string; added_by: string; created_at: string }
+interface AuditRow {
+  id: string; created_at: string; actor_id: string | null; actor_name: string;
+  action: AuditEntry['action']; target_id: string;
+  before: Record<string, unknown>; after: Record<string, unknown>;
+}
 interface TournamentParams {
   name: string; description: string; type: Tournament['type']; mode: MatchMode; teams: TournamentTeam[];
 }
@@ -47,6 +54,8 @@ interface StoreContextType {
   currentUser: Player | null; players: Player[]; matches: Match[]; tournaments: Tournament[];
   quests: WeeklyQuest[]; inviteCodes: InviteCode[]; whitelist: WhitelistEntry[];
   syncError: string | null; isLoading: boolean; refreshState: () => Promise<void>;
+  isRefreshing: boolean; isOnline: boolean; lastSyncedAt: string | null; isConnected: boolean;
+  auditEntries: AuditEntry[];
   newLevelUnlocked: { player: Player; oldLevel: number; newLevel: number } | null;
   clearLevelModal: () => void; setCurrentUser: (player: Player | null) => void;
   switchUser: (playerId: string) => void;
@@ -79,7 +88,7 @@ const STORAGE_KEY = 'bls_kicker_app_state_v5';
 const PROFILE_COLUMNS = 'id,name,avatar,year_joined,is_external,level,xp,xp_next_level,elo_1v1,elo_2v2,elo_total,league_points,wins_1v1,losses_1v1,wins_2v2,losses_2v2,current_streak,best_rank,role,is_suspended,is_deleted,badges,elo_history,created_at,updated_at';
 const failure = (message: string): ActionResult => ({ success: false, message });
 const success = (message: string): ActionResult => ({ success: true, message });
-const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Die Anfrage ist fehlgeschlagen.';
+const errorMessage = friendlyError;
 const profileToPlayer = (p: ProfileRow): Player => ({
   id: p.id, name: p.name, avatar: p.avatar || '⚽', email: p.email || '',
   createdAt: p.created_at,
@@ -127,6 +136,12 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(Boolean(supabase));
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
+  const auditRef = useRef(auditEntries);
+  auditRef.current = auditEntries;
   const [isHydrated, setIsHydrated] = useState(false);
   const [newLevelUnlocked, setNewLevelUnlocked] = useState<StoreContextType['newLevelUnlocked']>(null);
   const sessionRef = useRef<Session | null>(null);
@@ -143,6 +158,8 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
     const previous = refreshRef.current;
     const version = versionRef.current;
     const load = async () => {
+      if (version !== versionRef.current) return;
+      setIsRefreshing(true);
       try {
         const { data: ownData, error: ownError } = await client.rpc('get_my_profile').maybeSingle().returns<ProfileLookup>();
         if (ownError) throw new Error(ownError.message);
@@ -157,10 +174,18 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
         ]);
         let remoteWhitelist: WhitelistRow[] = [];
         let remoteInvites: InviteRow[] = [];
+        let remoteAudit: AuditRow[] = [];
         if (own && !own.is_suspended && ['owner', 'co_owner', 'admin'].includes(own.role)) {
-          [remoteWhitelist, remoteInvites] = await Promise.all([
+          [remoteWhitelist, remoteInvites, remoteAudit] = await Promise.all([
             readPages((start, end) => client.from('whitelist').select('*').order('id').range(start, end).returns<WhitelistRow[]>()),
             readPages((start, end) => client.from('invite_codes').select('*').order('code').range(start, end).returns<InviteRow[]>()),
+            (async () => {
+              const {data, error} = await client.from('audit_log').select('*')
+                .order('created_at', {ascending: false}).order('id', {ascending: false}).range(0,99).returns<AuditRow[]>();
+              if (error) throw new Error(error.message);
+              if (!data) throw new Error('Keine gültige Antwort für das Änderungsprotokoll.');
+              return data;
+            })(),
           ]);
         }
         if (version !== versionRef.current) return;
@@ -176,12 +201,17 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
         setCurrentUserId(own?.id || null);
         setWhitelist(remoteWhitelist.map((w) => ({id: w.id, pattern: w.pattern, addedBy: w.added_by, createdAt: w.created_at})));
         setInviteCodes(remoteInvites.map((c) => ({code: c.code, createdBy: c.created_by, usedBy: c.used_by, maxUses: c.max_uses, isActive: c.is_active, createdAt: c.created_at})));
+        setAuditEntries(remoteAudit.map((entry) => ({
+          id: entry.id, createdAt: entry.created_at, actorId: entry.actor_id, actorName: entry.actor_name,
+          action: entry.action, targetId: entry.target_id, before: entry.before, after: entry.after,
+        })));
+        setLastSyncedAt(new Date().toISOString());
         setSyncError(own?.is_suspended ? 'Dein Spielerprofil ist gesperrt. Bitte wende dich an die Administration.' : null);
       } catch (error) {
         console.error('Synchronisierung fehlgeschlagen:', error);
         if (version === versionRef.current) setSyncError(errorMessage(error));
       } finally {
-        if (version === versionRef.current) setIsLoading(false);
+        if (version === versionRef.current) {setIsLoading(false); setIsRefreshing(false);}
       }
     };
     const pending = (async () => {
@@ -198,13 +228,14 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
-          const parsed: {players?: Player[]; matches?: Match[]; tournaments?: Tournament[]; currentUserId?: string} = JSON.parse(saved);
+          const parsed: {players?: Player[]; matches?: Match[]; tournaments?: Tournament[]; currentUserId?: string; auditEntries?: AuditEntry[]} = JSON.parse(saved);
           if (!Array.isArray(parsed.players) || !Array.isArray(parsed.matches) || !Array.isArray(parsed.tournaments)) {
             throw new Error('Ungültige lokale Spieldaten. Bitte die Demodaten zurücksetzen.');
           }
           const rebuilt = rebuildLocalStatistics(parsed.players, parsed.matches, parsed.tournaments);
           setPlayers(rebuilt.players); setMatches(rebuilt.matches); setTournaments(parsed.tournaments);
           setCurrentUserId(parsed.currentUserId || null);
+          if (Array.isArray(parsed.auditEntries)) setAuditEntries(parsed.auditEntries);
         }
       } catch (error) {
         console.error('Lokale Daten konnten nicht geladen werden:', error);
@@ -219,9 +250,17 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
 
   useEffect(() => {
     if (supabase || !isHydrated) return;
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({players, matches, tournaments, currentUserId})); }
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({players, matches, tournaments, currentUserId, auditEntries})); }
     catch (error) { console.error('Lokale Speicherung fehlgeschlagen:', error); setSyncError(errorMessage(error)); }
-  }, [players, matches, tournaments, currentUserId, isHydrated]);
+  }, [players, matches, tournaments, currentUserId, auditEntries, isHydrated]);
+
+  useEffect(() => {
+    const online = () => setIsOnline(true);
+    const offline = () => setIsOnline(false);
+    setIsOnline(typeof navigator === 'undefined' || navigator.onLine);
+    window.addEventListener('online', online); window.addEventListener('offline', offline);
+    return () => {window.removeEventListener('online', online); window.removeEventListener('offline', offline);};
+  }, []);
 
   useEffect(() => {
     const client = supabase;
@@ -237,18 +276,20 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
         levelRef.current = null;
         setCurrentUserId(null); setPlayers([]); setMatches([]); setTournaments([]);
         setWhitelist([]); setInviteCodes([]); setNewLevelUnlocked(null);
+        setAuditEntries([]); setLastSyncedAt(null); setIsRefreshing(false);
         setIsLoading(Boolean(session));
       }
       if (!session) {
         levelRef.current = null;
         setCurrentUserId(null); setPlayers([]); setMatches([]); setTournaments([]);
         setWhitelist([]); setInviteCodes([]); setIsLoading(false); setNewLevelUnlocked(null);
+        setAuditEntries([]); setLastSyncedAt(null); setIsRefreshing(false);
       } else { void refreshState(); }
     };
     let initialResolved = false;
     client.auth.getSession().then(({data, error}) => {
       if (!active || initialResolved) return;
-      if (error) { setSyncError(error.message); setIsLoading(false); return; }
+      if (error) { console.error('Anmeldung konnte nicht geladen werden:', error); setSyncError(friendlyError(error)); setIsLoading(false); return; }
       initialResolved = true;
       setSession(data.session);
     });
@@ -258,7 +299,7 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
       setTimeout(() => setSession(session), 0);
     });
     const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') void refreshState();
+      if (document.visibilityState === 'visible' && (typeof navigator === 'undefined' || navigator.onLine)) void refreshState();
     }, 15000);
     const resume = () => { if (document.visibilityState === 'visible') void refreshState(); };
     document.addEventListener('visibilitychange', resume);
@@ -274,6 +315,12 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
   const quests = weeklyQuests(matches, currentUser?.id);
   const canManage = Boolean(currentUser && ['owner', 'co_owner', 'admin', 'organiser'].includes(currentUser.role));
   const isAdmin = Boolean(currentUser && ['owner', 'co_owner', 'admin'].includes(currentUser.role));
+  const recordLocalAudit = (action: AuditEntry['action'], targetId: string, before: Record<string, unknown>, after: Record<string, unknown>) => {
+    const entry: AuditEntry = {id: crypto.randomUUID(), createdAt: new Date().toISOString(),
+      actorId: currentUser?.id || null, actorName: currentUser?.name || 'System', action, targetId, before, after};
+    auditRef.current = [entry, ...auditRef.current].slice(0,100);
+    setAuditEntries(auditRef.current);
+  };
 
   const updateLocal = (nextMatches: Match[], nextTournaments = stateRef.current.tournaments) => {
     const rebuilt = rebuildLocalStatistics(stateRef.current.players, nextMatches, nextTournaments);
@@ -290,7 +337,7 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
     mutationRef.current = true;
     try {
       const {error} = await supabase.rpc(name, params);
-      if (error) { console.error(`${name} fehlgeschlagen:`, error); return failure(error.message); }
+      if (error) { console.error(`${name} fehlgeschlagen:`, error); return failure(friendlyError(error)); }
       await refreshState();
       return success(message);
     } catch (error) {
@@ -309,11 +356,21 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
         if (patch.status === 'cancelled' && isAdmin) {
           const next = resetLocalTournamentMatch(stateRef.current.tournaments, stateRef.current.matches, id);
           updateLocal(next.matches, next.tournaments);
+          recordLocalAudit('match_cancelled', id, {status: match.status, score_a: match.scoreA, score_b: match.scoreB},
+            {status: 'cancelled', score_a: match.scoreA, score_b: match.scoreB});
           return success(message);
         }
         return failure('Bitte Turnierspiele über die Turnierleitung im Spielplan korrigieren.');
       }
-      updateLocal(stateRef.current.matches.map((m) => m.id === id ? {...m, ...patch} : m)); return success(message);
+      updateLocal(stateRef.current.matches.map((m) => m.id === id ? {...m, ...patch} : m));
+      if (match && ((patch.status === 'cancelled' && match.status !== 'cancelled')
+        || (patch.scoreA !== undefined && patch.scoreA !== match.scoreA)
+        || (patch.scoreB !== undefined && patch.scoreB !== match.scoreB))) {
+        recordLocalAudit(patch.status === 'cancelled' ? 'match_cancelled' : 'score_corrected', id,
+          {status: match.status, score_a: match.scoreA, score_b: match.scoreB},
+          {status: patch.status || match.status, score_a: patch.scoreA ?? match.scoreA, score_b: patch.scoreB ?? match.scoreB});
+      }
+      return success(message);
     }
     catch (error) { console.error('Lokale Wertung fehlgeschlagen:', error); return failure(errorMessage(error)); }
   };
@@ -334,7 +391,7 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
         const {data, error} = await supabase.rpc('submit_match_result', {
           p_mode: mode, p_team_a: teamA, p_team_b: teamB, p_score_a: scoreA, p_score_b: scoreB,
         }).single().returns<MatchRow>();
-        if (error || !data) { console.error('Spiel konnte nicht gespeichert werden:', error); return {...failure(error?.message || 'Keine Spielantwort erhalten.'), matchId: ''}; }
+        if (error || !data) { console.error('Spiel konnte nicht gespeichert werden:', error); return {...failure(friendlyError(error, 'Keine gültige Spielantwort erhalten. Bitte erneut versuchen.')), matchId: ''}; }
         await refreshState();
         return {...success('Spiel gespeichert und gewertet.'), matchId: data.id};
       } catch (error) { console.error('Spielanfrage fehlgeschlagen:', error); return {...failure(errorMessage(error)), matchId: ''}; }
@@ -410,7 +467,8 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
     if (!supabase) return failure('Die sichere Authentifizierung ist nicht konfiguriert.');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return failure('Bitte eine gültige E-Mail-Adresse eingeben.');
     const {error} = await supabase.auth.signInWithOtp({email: email.trim().toLowerCase(), options: {shouldCreateUser: true}});
-    return error ? failure(error.message) : success('Verifikationscode angefordert. Bitte prüfe auch den Spam-Ordner.');
+    if (error) {console.error('Code-Anforderung fehlgeschlagen:', error); return failure(friendlyError(error));}
+    return success('Verifikationscode angefordert. Bitte prüfe auch den Spam-Ordner.');
   };
   const verifyCode = async (email: string, code: string) => {
     if (!supabase) return failure('Die sichere Authentifizierung ist nicht konfiguriert.');
@@ -418,7 +476,7 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
     if (error) return failure('Ungültiger oder abgelaufener Code.');
     sessionRef.current = data.session; versionRef.current++;
     const {data: ownData, error: ownError} = await supabase.rpc('get_my_profile').maybeSingle().returns<ProfileLookup>();
-    if (ownError) return failure(ownError.message);
+    if (ownError) {console.error('Profilabfrage fehlgeschlagen:', ownError); return failure(friendlyError(ownError));}
     const own = isExistingProfile(ownData) ? ownData : null;
     if (own?.is_suspended) return failure('Dein Spielerprofil ist gesperrt.');
     await refreshState();
@@ -430,7 +488,7 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
     if (sessionError) return failure(sessionError.message);
     if (session.session?.user.email?.toLowerCase() !== email.trim().toLowerCase()) return failure('Bitte bestätige zuerst deine E-Mail-Adresse.');
     const {data: profile, error} = await supabase.rpc('create_player_profile', {p_name: name.trim(), p_avatar: avatar, p_year_joined: yearJoined}).single().returns<ProfileRow>();
-    if (error || !profile) return failure(error?.message || 'Profil konnte nicht erstellt werden.');
+    if (error || !profile) {console.error('Profilanlage fehlgeschlagen:', error); return failure(friendlyError(error, 'Profil konnte nicht erstellt werden.'));}
     sessionRef.current = session.session;
     setCurrentUserId(profile.id); setPlayers((prev) => [...prev.filter((p) => p.id !== profile.id), profileToPlayer(profile)]);
     await refreshState();
@@ -464,11 +522,12 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
   const logout = async () => {
     if (supabase) {
       const {error} = await supabase.auth.signOut();
-      if (error) return failure(error.message);
+      if (error) {console.error('Abmeldung fehlgeschlagen:', error); return failure(friendlyError(error));}
     }
     versionRef.current++; sessionRef.current = null; levelRef.current = null;
     setCurrentUserId(null); setNewLevelUnlocked(null);
-    if (supabase) {setPlayers([]); setMatches([]); setTournaments([]); setWhitelist([]); setInviteCodes([]);}
+    if (supabase) {setPlayers([]); setMatches([]); setTournaments([]); setWhitelist([]); setInviteCodes([]); setAuditEntries([]);}
+    setLastSyncedAt(null); setIsRefreshing(false);
     return success('Abgemeldet.');
   };
   const deletePlayer = async (id: string): Promise<ActionResult> => {
@@ -481,12 +540,15 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
       return failure('Der eigene Account und Owner-Profile dürfen nicht gelöscht werden.');
     }
     if (supabase) return rpcAction('delete_player', {p_player_id: id}, 'Spieler gelöscht.');
+    if (target.isDeleted) return success('Spieler bereits gelöscht.');
     const remaining = stateRef.current.players.map((p): Player => p.id === id
       ? {...p, isDeleted: true, isSuspended: true, role: 'player', name: `Gelöschter Spieler ${id}`,
         avatar: '⚽', email: '', yearJoined: null, isExternal: false}
       : p);
     stateRef.current = {...stateRef.current, players: remaining};
     setPlayers(remaining);
+    auditRef.current = auditRef.current.map((entry) => entry.actorId === id ? {...entry, actorName: `Gelöschter Spieler ${id}`} : entry);
+    recordLocalAudit('player_deleted', id, {is_deleted: false}, {is_deleted: true});
     return success('Spieler gelöscht; die Spielhistorie bleibt erhalten.');
   };
   const createTournament = async (params: TournamentParams) => {
@@ -497,7 +559,7 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
       try {
         const {data, error} = await supabase.rpc('create_tournament', {p_name: params.name, p_description: params.description,
           p_type: params.type, p_mode: params.mode, p_teams: params.teams}).single().returns<TournamentRow>();
-        if (error || !data) {console.error('Turniererstellung fehlgeschlagen:', error); return failure(error?.message || 'Keine Turnierantwort erhalten.');}
+        if (error || !data) {console.error('Turniererstellung fehlgeschlagen:', error); return failure(friendlyError(error, 'Keine gültige Turnierantwort erhalten. Bitte erneut versuchen.'));}
         await refreshState(); return {...success('Turnier gespeichert.'), tournamentId: data.id};
       } catch (error) {console.error('Turniererstellung fehlgeschlagen:', error); return failure(errorMessage(error));}
       finally {mutationRef.current = false;}
@@ -516,19 +578,32 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
       return failure('Das Turnier enthält unbekannte oder gesperrte Spieler.');
     }
     try {
+      const previousMatches = stateRef.current.matches;
       const next = scoreLocalTournament(stateRef.current.tournaments, stateRef.current.matches, id, matchId, a, b, currentUser!.id);
-      updateLocal(next.matches, next.tournaments); return success('Turnierergebnis lokal gespeichert.');
+      updateLocal(next.matches, next.tournaments);
+      for (const before of previousMatches) {
+        const after = next.matches.find((m) => m.id === before.id);
+        if (after && (before.status !== after.status || before.scoreA !== after.scoreA || before.scoreB !== after.scoreB)) {
+          recordLocalAudit(after.status === 'cancelled' ? 'match_cancelled' : 'score_corrected', before.id,
+            {status: before.status, score_a: before.scoreA, score_b: before.scoreB},
+            {status: after.status, score_a: after.scoreA, score_b: after.scoreB});
+        }
+      }
+      return success('Turnierergebnis lokal gespeichert.');
     } catch (error) {console.error('Turnierwertung fehlgeschlagen:', error); return failure(errorMessage(error));}
   };
   const resetToDefaultData = () => {
     if (supabase) {setSyncError('Produktive Daten können hier nicht zurückgesetzt werden.'); return;}
     setPlayers([]); setMatches([]); setTournaments([]); setCurrentUserId(null); setSyncError(null);
+    setAuditEntries([]); setLastSyncedAt(null);
     setIsHydrated(true);
     localStorage.removeItem(STORAGE_KEY);
   };
 
   return <StoreContext.Provider value={{
     currentUser, players, matches, tournaments, quests, whitelist, inviteCodes, syncError, isLoading, refreshState,
+    isRefreshing, isOnline, lastSyncedAt, isConnected: Boolean(supabase),
+    auditEntries: isAdmin ? auditEntries : [],
     newLevelUnlocked, clearLevelModal: () => setNewLevelUnlocked(null),
     setCurrentUser: (p) => {if (!supabase || p?.id === currentUserId) setCurrentUserId(p?.id || null);},
     switchUser: (id) => {if (!supabase) setCurrentUserId(id);},

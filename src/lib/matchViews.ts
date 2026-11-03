@@ -2,6 +2,7 @@ import { Match, Player, Tournament } from '@/types';
 import { useStore } from '@/lib/store';
 import { isScoredMatch, qualifiedPlayers } from '@/lib/statistics';
 import { MAX_SCORE } from './elo';
+import { friendlyError } from './feedback';
 
 export { daysAgoKey, getMonthStartKey, getWeekStartKey, toDateKey } from './dates';
 
@@ -170,7 +171,7 @@ export async function runAction(
       const message = typeof value.message === 'string' && value.message.trim() ? value.message : '';
       return {
         success: value.success,
-        message: message || (value.success ? options.successMessage || 'Erledigt.' : options.fallbackError),
+        message: value.success ? message || options.successMessage || 'Erledigt.' : friendlyError(message, options.fallbackError),
       };
     }
     if (value === undefined && options.voidIsSuccess) {
@@ -178,8 +179,8 @@ export async function runAction(
     }
     return { success: false, message: `${options.fallbackError} (keine Rückmeldung vom Server)` };
   } catch (error) {
-    const message = error instanceof Error && error.message ? error.message : options.fallbackError;
-    return { success: false, message };
+    console.error('Aktion fehlgeschlagen:', error);
+    return { success: false, message: friendlyError(error, options.fallbackError) };
   }
 }
 

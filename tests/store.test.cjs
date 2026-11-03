@@ -4,6 +4,8 @@ const {loadTypeScript, player} = require('./load-typescript.cjs');
 
 function harness(client = null, persisted) {
   const slots = [], effects = [];
+  const listeners = new Map();
+  const navigator={onLine:true};
   let cursor = 0, first = true;
   const react = {
     createContext: () => ({Provider:'provider'}), useContext:()=>null,
@@ -16,10 +18,17 @@ function harness(client = null, persisted) {
   const storage = {getItem:()=>persisted?JSON.stringify(persisted):null,setItem:()=>{},removeItem:()=>{}};
   const store=loadTypeScript('src/lib/store.tsx',{react,'./supabaseClient':{supabase:client}},
     {localStorage:storage,document:{visibilityState:'visible',addEventListener(){},removeEventListener(){}},
-      window:{addEventListener(){},removeEventListener(){}},setInterval:()=>0,clearInterval:()=>{}});
+      navigator,window:{
+        addEventListener:(name,fn)=>listeners.set(name,[...(listeners.get(name)||[]),fn]),
+        removeEventListener(){},
+      },setInterval:()=>0,clearInterval:()=>{}});
   const render=()=>{cursor=0;const api=store.StoreProvider({children:null}).props.value;first=false;return api;};
   render();
-  return {render,hydrate:async()=>{effects.forEach(fn=>fn());await new Promise(resolve=>setTimeout(resolve,20));}};
+  return {render,emit:async(name)=>{
+    navigator.onLine=name!=='offline';
+    (listeners.get(name)||[]).forEach(fn=>fn());
+    await new Promise(resolve=>setTimeout(resolve,20));
+  },hydrate:async()=>{effects.forEach(fn=>fn());await new Promise(resolve=>setTimeout(resolve,20));}};
 }
 function builder(response) {
   const result={then:(resolve,reject)=>Promise.resolve(response).then(resolve,reject)};
@@ -114,7 +123,7 @@ test('connected player deletion uses the authorized RPC and retains state on fai
     assert.equal(calls[0].name,'delete_player');
     assert.equal(calls[0].params.p_player_id,'target');
     assert.equal(h.render().players.find(p=>p.id==='target').isDeleted,!denied);
-    if(denied)assert.match(result.message,/Deletion denied/);
+    if(denied)assert.match(result.message,/keine Berechtigung/);
   }
 });
 test('deleting a scored opponent preserves replay and removes them from the current ranking', async()=>{
@@ -147,6 +156,7 @@ test('admin deletion controls are limited to owner and co-owner and require conf
       useState:value=>[value,()=>{}],useRef:value=>({current:value}),useEffect:()=>{},
     };
     const {AdminView}=loadTypeScript('src/components/AdminView.tsx',{
+      './AuditLog':{AuditLog:()=>null},
       react,'@/lib/store':{useStore:()=>({
         currentUser:actor,players:[actor,target,owner,{...player('deleted'),isDeleted:true,isSuspended:true}],matches:[],inviteCodes:[],whitelist:[],
         deletePlayer:async id=>{deleted.push(id);return {success:true,message:'Gelöscht'};},
@@ -242,7 +252,7 @@ test('server mutation failures are returned and do not fabricate local tournamen
   };
   const h=harness(client);await h.hydrate();
   const result=await h.render().createTournament({name:'Doubles',description:'',mode:'2v2',type:'ko',teams:[]});
-  assert.equal(result.success,false);assert.match(result.message,/denied/);assert.equal(h.render().tournaments.length,0);
+  assert.equal(result.success,false);assert.match(result.message,/keine Berechtigung/);assert.equal(h.render().tournaments.length,0);
 });
 test('admin corrections use the correct RPC action and block duplicate concurrent writes',async()=>{
   const p=row(player('admin','admin'));
@@ -294,4 +304,70 @@ test('logout prevents an in-flight refresh from restoring another session data',
   assert.equal(h.render().currentUser,null);
   assert.equal(h.render().players.length,0);
   assert.equal(h.render().matches.length,0);
+});
+test('sync timestamps only advance on successful loads and offline state is explicit',async()=>{
+  const p=row(player('a'));
+  let fail=false;
+  const client={
+    auth:{getSession:async()=>({data:{session:{user:{id:'a'}}},error:null}),
+      onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})},
+    rpc:()=>builder({data:p,error:null}),
+    from:table=>builder(fail&&table==='profiles'?{data:null,error:{message:'Failed to fetch'}}
+      :{data:table==='profiles'?[p]:[],error:null}),
+  };
+  const h=harness(client);await h.hydrate();
+  const first=h.render().lastSyncedAt;
+  assert.ok(first);
+  assert.equal(h.render().isRefreshing,false);
+  fail=true;await h.render().refreshState();
+  assert.equal(h.render().lastSyncedAt,first);
+  assert.equal(h.render().players.length,1);
+  assert.match(h.render().syncError,/Internetverbindung/);
+  assert.equal(h.render().isRefreshing,false);
+  await h.emit('offline');assert.equal(h.render().isOnline,false);
+  fail=false;await h.emit('online');
+  assert.equal(h.render().isOnline,true);
+  assert.equal(h.render().syncError,null);
+  assert.ok(h.render().lastSyncedAt>=first);
+});
+test('audit entries load only for administrators and recent reads are bounded',async()=>{
+  for(const role of ['owner','co_owner','admin','player','organiser']){
+    const p=row(player('a',role)),reads=[];
+    const entry={id:'audit',created_at:'2026-11-03T10:00:00Z',actor_id:'a',actor_name:'a',
+      action:'player_deleted',target_id:'b',before:{is_deleted:false},after:{is_deleted:true}};
+    const client={
+      auth:{getSession:async()=>({data:{session:{user:{id:'a'}}},error:null}),
+        onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})},
+      rpc:()=>builder({data:p,error:null}),
+      from:table=>{
+        const query=builder({data:table==='profiles'?[p]:table==='audit_log'?[entry]:[],error:null});
+        if(table==='audit_log')query.range=(start,end)=>{reads.push({start,end});return query;};
+        return query;
+      },
+    };
+    const h=harness(client);await h.hydrate();
+    const admin=['owner','co_owner','admin'].includes(role);
+    assert.equal(h.render().auditEntries.length,admin?1:0);
+    assert.equal(reads.length,admin?1:0);
+    if(admin)assert.deepEqual(reads,[{start:0,end:99}]);
+  }
+});
+test('local corrections, annulments and deletions record actor without phantom replay events',async()=>{
+  const h=harness(null,{players:[player('actor','owner'),player('target')],matches:[],
+    tournaments:[],currentUserId:'actor'});
+  await h.hydrate();
+  const {matchId}=await h.render().submitMatch({mode:'1v1',teamA:['actor'],teamB:['target'],scoreA:10,scoreB:5});
+  assert.equal(h.render().auditEntries.length,0);
+  await h.render().adminResolveDispute(matchId,'confirm',5,10);
+  await h.render().adminResolveDispute(matchId,'confirm',5,10);
+  await h.render().adminResolveDispute(matchId,'cancel');
+  await h.render().deletePlayer('target');
+  const entries=h.render().auditEntries;
+  assert.equal(entries.length,3);
+  assert.deepEqual(Array.from(entries,e=>e.action),['player_deleted','match_cancelled','score_corrected']);
+  assert.ok(entries.every(e=>e.actorId==='actor'));
+  assert.equal(entries[2].before.score_a,10);
+  assert.equal(entries[2].after.score_a,5);
+  h.render().switchUser('target');
+  assert.equal(h.render().auditEntries.length,0);
 });

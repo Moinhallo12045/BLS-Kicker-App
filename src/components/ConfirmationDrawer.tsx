@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useStore } from '@/lib/store';
 import { Match } from '@/types';
 import {
@@ -54,6 +54,7 @@ export function ConfirmationDrawer({ isOpen, onClose, matchId }: ConfirmationDra
 
   const [busyMatchId, setBusyMatchId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Record<string, Feedback>>({});
+  const retries = useRef<Record<string, () => Promise<boolean>>>({});
 
   useEffect(() => {
     if (isOpen) return;
@@ -61,6 +62,7 @@ export function ConfirmationDrawer({ isOpen, onClose, matchId }: ConfirmationDra
     setCounterId(null);
     setDisputeReason('');
     setFeedback({});
+    retries.current = {};
   }, [isOpen]);
 
   useEffect(() => {
@@ -97,6 +99,8 @@ export function ConfirmationDrawer({ isOpen, onClose, matchId }: ConfirmationDra
     const result = await runAction(action, { fallbackError });
     setBusyMatchId(null);
     setMatchFeedback(matchId, result);
+    if (result.success) delete retries.current[matchId];
+    else retries.current[matchId] = () => perform(matchId,action,fallbackError);
     return result.success;
   };
 
@@ -163,6 +167,8 @@ export function ConfirmationDrawer({ isOpen, onClose, matchId }: ConfirmationDra
       >
         {item.error ? <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" /> : <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-px" />}
         <span className="break-words">{item.text}</span>
+        {item.error && retries.current[matchId] && <button type="button" disabled={Boolean(busyMatchId)}
+          onClick={() => void retries.current[matchId]?.()} className="min-h-[44px] shrink-0 underline disabled:opacity-50">Erneut versuchen</button>}
       </div>
     );
   };

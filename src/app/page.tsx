@@ -18,6 +18,9 @@ import { useStore } from '@/lib/store';
 import { isAdminRole, useSyncState } from '@/lib/matchViews';
 import { AppNavigation, useAppNavigation } from '@/components/AppNavigation';
 import { MatchDetailView, PlayerDetailView } from '@/components/DetailViews';
+import { SyncStatus } from '@/components/SyncStatus';
+import { ClarificationReminder } from '@/components/ClarificationReminder';
+import { friendlyError } from '@/lib/feedback';
 
 function SyncErrorBanner() {
   const { syncError, refreshState } = useSyncState();
@@ -33,7 +36,8 @@ function SyncErrorBanner() {
     try {
       await refreshState();
     } catch (error) {
-      setRetryError(error instanceof Error ? error.message : 'Erneuter Versuch fehlgeschlagen.');
+      console.error('Aktualisierung fehlgeschlagen:', error);
+      setRetryError(friendlyError(error));
     } finally {
       setIsRetrying(false);
     }
@@ -98,6 +102,7 @@ function AppContent() {
         onOpenMatchEntry={() => setIsMatchEntryOpen(true)}
         onOpenConfirmations={() => setIsConfirmationOpen(true)}
       />
+      <SyncStatus />
 
       {isLoading && (
         <div
@@ -110,6 +115,7 @@ function AppContent() {
       )}
 
       <div className="flex-1 max-w-4xl w-full mx-auto px-3 sm:px-4 py-4 sm:py-6 pb-bottom-nav">
+        <ClarificationReminder onOpen={() => setIsConfirmationOpen(true)} />
         <div hidden={Boolean(location.playerId || location.matchId)}>
           <div hidden={activeTab !== 'dashboard'}>
             <DashboardView

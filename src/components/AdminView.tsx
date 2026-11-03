@@ -5,6 +5,7 @@ import { useStore } from '@/lib/store';
 import { ShieldCheck, AlertTriangle, Key, Users, Edit2, Trash2, Mail, Plus, Loader2 } from 'lucide-react';
 import { Player, PlayerRole } from '@/types';
 import { isAdminRole, parseScore, playerNames, runAction, validateScore } from '@/lib/matchViews';
+import { AuditLog } from './AuditLog';
 
 const ROLE_LABELS: Record<PlayerRole, string> = {
   owner: 'Owner',
@@ -57,6 +58,7 @@ export function AdminView() {
   const [notification, setNotification] = useState<Notice | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryAction = useRef<(() => Promise<unknown>) | null>(null);
 
   const [resolvingMatchId, setResolvingMatchId] = useState<string | null>(null);
   const [customScoreA, setCustomScoreA] = useState('');
@@ -80,6 +82,7 @@ export function AdminView() {
     const result = await runAction(action, { fallbackError });
     setBusyKey(null);
     notify(result.message, !result.success);
+    retryAction.current = result.success ? null : () => perform(key,action,fallbackError);
     return result;
   };
 
@@ -163,6 +166,8 @@ export function AdminView() {
           }`}
         >
           {notification.text}
+          {notification.error && retryAction.current && <button type="button" disabled={Boolean(busyKey)}
+            onClick={() => void retryAction.current?.()} className="min-h-[44px] ml-3 underline disabled:opacity-50">Erneut versuchen</button>}
         </div>
       )}
 
@@ -547,6 +552,7 @@ export function AdminView() {
           })}
         </div>
       </section>
+      <AuditLog />
     </div>
   );
 }
