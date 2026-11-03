@@ -10,6 +10,7 @@ import {
   Crown,
   Users,
   ShieldCheck,
+  Sparkles,
   Bell,
   MoreHorizontal,
 } from 'lucide-react';
@@ -34,6 +35,7 @@ const TOP_TABS: { id: TabType; label: string; icon: React.ComponentType<{ classN
   { id: 'tournaments', label: 'Turniere', icon: Crown },
   { id: 'players', label: 'Spieler', icon: Users },
   { id: 'profile', label: 'Mein Profil', icon: User },
+  { id: 'features', label: 'Funktionen', icon: Sparkles },
 ];
 
 export function Navigation({
@@ -168,7 +170,7 @@ export function Navigation({
         {moreOpen && (
           <div ref={moreRef} id="more-navigation" className="pointer-events-auto absolute bottom-full mb-3 w-[calc(100%-1.5rem)] max-w-md felt-card p-2 shadow-2xl">
             <nav aria-label="Weitere Bereiche" className="grid grid-cols-2 gap-2">
-              {tabs.filter(({ id }) => ['players', 'tournaments', 'profile', 'admin'].includes(id)).map(({ id, label, icon: Icon }) => (
+              {tabs.filter(({ id }) => ['players', 'tournaments', 'profile', 'features', 'admin'].includes(id)).map(({ id, label, icon: Icon }) => (
                 <button key={id} type="button" aria-current={currentTab === id ? 'page' : undefined}
                   onClick={() => { setMoreOpen(false); onSelectTab(id); moreButton.current?.focus(); }}
                   className={`min-h-[48px] rounded-xl px-3 flex items-center gap-2 text-sm font-bold ${currentTab === id ? 'bg-emerald-800 text-amber-300' : 'text-emerald-200 hover:bg-emerald-900'}`}>
@@ -197,7 +199,7 @@ export function Navigation({
           {bottomItem('matches', 'Spiele', Swords)}
           <button ref={moreButton} type="button" aria-expanded={moreOpen} aria-controls="more-navigation"
             onClick={() => setMoreOpen(!moreOpen)}
-            className={`flex-1 min-w-0 min-h-[48px] rounded-xl flex flex-col items-center justify-center ${['players', 'tournaments', 'profile', 'admin'].includes(currentTab) || moreOpen ? 'bg-emerald-950/80 text-amber-300' : 'text-amber-200/70'}`}>
+            className={`flex-1 min-w-0 min-h-[48px] rounded-xl flex flex-col items-center justify-center ${['players', 'tournaments', 'profile', 'features', 'admin'].includes(currentTab) || moreOpen ? 'bg-emerald-950/80 text-amber-300' : 'text-amber-200/70'}`}>
             <MoreHorizontal className="w-5 h-5 mb-0.5" /><span className="text-[10px] font-bold">Mehr</span>
           </button>
         </nav>
