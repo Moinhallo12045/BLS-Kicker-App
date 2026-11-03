@@ -54,6 +54,93 @@ test('offline match submission rejects scores above the UI limit', async()=>{
   assert.match(result.message,/0 und 10/);
   assert.equal(h.render().matches.length,0);
 });
+test('offline player deletion allows owner and co-owner but protects self and owners', async()=>{
+  for(const role of ['owner','co_owner','admin','organiser','player']){
+    const h=harness(null,{players:[player('actor',role),player('target'),player('owner','owner')],
+      matches:[],tournaments:[],currentUserId:'actor'});
+    await h.hydrate();
+    assert.equal((await h.render().deletePlayer('actor')).success,false);
+    assert.equal((await h.render().deletePlayer('owner')).success,false);
+    const result=await h.render().deletePlayer('target');
+    const allowed=['owner','co_owner'].includes(role);
+    assert.equal(result.success,allowed);
+    assert.equal(h.render().players.some(p=>p.id==='target'),!allowed);
+    assert.equal(h.render().currentUser.id,'actor');
+  }
+});
+test('offline player deletion retains players referenced by matches or tournaments', async()=>{
+  const match={id:'game',mode:'1v1',teamA:['actor'],teamB:['target'],scoreA:10,scoreB:5,
+    creatorId:'actor',confirmedBy:[],status:'cancelled',resultApplied:false,date:'2026-11-03'};
+  for(const data of [
+    {matches:[match],tournaments:[]},
+    {matches:[],tournaments:[{id:'t',participants:['target'],matches:[]}]},
+    {matches:[],tournaments:[{id:'t',participants:[],teams:[{id:'team',playerIds:['target']}],matches:[]}]},
+  ]){
+    const h=harness(null,{players:[player('actor','co_owner'),player('target')],currentUserId:'actor',...data});
+    await h.hydrate();
+    const result=await h.render().deletePlayer('target');
+    assert.equal(result.success,false);
+    assert.match(result.message,/verknüpften Spielen oder Turnieren/);
+    assert.equal(h.render().players.length,2);
+  }
+});
+test('connected player deletion uses the authorized RPC and retains state on failure', async()=>{
+  for(const denied of [false,true]){
+    const actor=row(player('actor','co_owner')),target=row(player('target'));
+    let deleted=false;
+    const calls=[];
+    const client={
+      auth:{getSession:async()=>({data:{session:{user:{id:'actor'}}},error:null}),
+        onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})},
+      rpc:(name,params)=>{
+        if(name==='get_my_profile')return builder({data:actor,error:null});
+        calls.push({name,params});
+        if(!denied)deleted=true;
+        return builder({data:null,error:denied?{message:'Deletion denied'}:null});
+      },
+      from:(table)=>builder({data:table==='profiles'?(deleted?[actor]:[actor,target]):[],error:null}),
+    };
+    const h=harness(client);await h.hydrate();
+    const result=await h.render().deletePlayer('target');
+    assert.equal(result.success,!denied);
+    assert.equal(calls.length,1);
+    assert.equal(calls[0].name,'delete_player');
+    assert.equal(calls[0].params.p_player_id,'target');
+    assert.equal(h.render().players.some(p=>p.id==='target'),denied);
+    if(denied)assert.match(result.message,/Deletion denied/);
+  }
+});
+test('admin deletion controls are limited to owner and co-owner and require confirmation', async()=>{
+  for(const role of ['owner','co_owner','admin']){
+    const actor=player('actor',role),target=player('target'),owner=player('owner','owner');
+    const elements=[],deleted=[];
+    let confirmed=false;
+    const react={
+      createElement:(type,props,...children)=>{
+        const element={type,props:props||{},children};elements.push(element);return element;
+      },
+      useState:value=>[value,()=>{}],useRef:value=>({current:value}),useEffect:()=>{},
+    };
+    const {AdminView}=loadTypeScript('src/components/AdminView.tsx',{
+      react,'@/lib/store':{useStore:()=>({
+        currentUser:actor,players:[actor,target,owner],matches:[],inviteCodes:[],whitelist:[],
+        deletePlayer:async id=>{deleted.push(id);return {success:true,message:'Gelöscht'};},
+      })},
+    },{window:{confirm:()=>confirmed},setTimeout:()=>0,clearTimeout:()=>{}});
+    AdminView();
+    const buttons=elements.filter(e=>e.type==='button'&&e.props['aria-label']?.endsWith(' löschen'));
+    assert.equal(buttons.length,role==='admin'?0:1);
+    if(buttons.length){
+      assert.equal(buttons[0].props['aria-label'],'target löschen');
+      buttons[0].props.onClick();
+      assert.equal(deleted.length,0);
+      confirmed=true;
+      buttons[0].props.onClick();
+      await new Promise(resolve=>setTimeout(resolve,0));
+      assert.deepEqual(deleted,['target']);
+    }
+  }
+});
 test('connected state paginates public profiles without private identity columns',async()=>{
   const data=Array.from({length:1001},(_,i)=>row(player(`p${i}`)));
   data[0].is_external=true;

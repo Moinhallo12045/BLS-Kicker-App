@@ -56,7 +56,7 @@ Eine moderne, hochwertige und mobiloptimierte Web-App (PWA) für geschlossene Ti
    - **Organiser**: Turniere und Turniermatches; keine Rollen- oder Whitelistverwaltung. Eigene Spiele können wie bei Playern zur Annullierung vorgeschlagen werden, die Gegenseite muss zustimmen.
    - **Player**: eigene Profil- und Spielfunktionen; eigene Spiele können zur Annullierung vorgeschlagen werden, die Gegenseite muss zustimmen.
    - **Sofortige Spielannullierung**: Nur Owner, Co-Owner und Admins dürfen Spiele ohne Zustimmung der Gegenseite annullieren.
-   - **Spieler löschen**: Nur Owner dürfen Spieler löschen. Der eigene Account und andere Owner sind geschützt.
+   - **Spieler löschen**: Owner und Co-Owner dürfen Spieler löschen. Der eigene Account und alle Owner-Profile sind geschützt. Verknüpfte Spiele, Turniere, Einladungscodes und Whitelist-Einträge verhindern die Löschung.
    - **Turnierspiele zurücksetzen**: Erfordert aktuell Administratorrechte (Owner, Co-Owner oder Admin).
 
 ---
@@ -96,7 +96,7 @@ Die Hauptnavigation liegt am unteren Bildschirmrand; große Bedienelemente, Safe
 - Profilanlage, Rollenwechsel, Sperren, Moderation und Turnierwertung laufen über autorisierte RPCs. Direkte Client-Schreibzugriffe können weder Statistikwerte noch Auth-Verknüpfung, Rolle oder Sperrstatus manipulieren.
 - Die Annullierung eines Ligaspiels durch einen Teilnehmer läuft grundsätzlich über gegenseitige Zustimmung; Owner, Co-Owner und Admins dürfen sie sofort ausführen. Beim anschließenden Statistik-Rebuild werden alle abgeleiteten Scoring-Datensätze mit explizit qualifizierten `DELETE`-Statements geleert.
 - Die Reparaturmigration `20261103190000_repair_legacy_stats_deletes.sql` aktualisiert auch bereits installierte Replay-Funktionen mit ursprünglichen `DELETE`-Statements ohne `WHERE` sowie mit der späteren `WHERE TRUE`-Variante. Das anschließende Update der Turnierabzeichen erhält ebenfalls eine explizite `WHERE`-Bedingung für Supabases Schutzprüfung.
-- Das Löschen von Spielerprofilen ist per RLS ausschließlich für Owner freigegeben und schützt den eigenen Account sowie alle Owner-Profile.
+- Das Löschen von Spielerprofilen läuft über `delete_player(UUID)` für aktive Owner und Co-Owner; direkte Client-Löschzugriffe sind gesperrt. Der eigene Account, alle Owner-Profile und Spieler mit verknüpfter Spiel-, Turnier- oder Verwaltungshistorie sind geschützt. Das Auth-Konto wird nicht gelöscht.
 - Öffentliche Profillisten enthalten keine E-Mail-Adressen oder Auth-Benutzer-IDs. Das eigene Profil wird über `get_my_profile()` bestimmt.
 - Ein Auth-Konto ist noch kein Spielerprofil: Erst das Absenden des Profilformulars legt über `create_player_profile` einen Eintrag in `public.profiles` an. Ein leeres Ergebnis von `get_my_profile()` (auch ein Objekt mit NULL-Feldern) wird nicht als Spieler übernommen; die Profileinrichtung bleibt verfügbar.
 - ELO verwendet K=32 ohne Torabstandsbonus; die Gesamtwertung ist der gerundete Mittelwert beider Modi. Ein Spiel gibt 25 XP, ein Sieg zusätzlich 50 XP und 3 Ligapunkte. Level 1 benötigt 150 XP, danach gilt `100 + Level * 25`, maximal Level 50.

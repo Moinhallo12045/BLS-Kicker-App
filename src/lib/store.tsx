@@ -63,6 +63,7 @@ interface StoreContextType {
   logout: () => Promise<ActionResult>;
   updatePlayerRole: (playerId: string, role: PlayerRole) => Promise<ActionResult>;
   setPlayerSuspension: (playerId: string, suspended: boolean) => Promise<ActionResult>;
+  deletePlayer: (playerId: string) => Promise<ActionResult>;
   checkWhitelistAndSendCode: (email: string) => Promise<ActionResult & {isExistingPlayer?: boolean}>;
   verifyCode: (email: string, code: string) => Promise<ActionResult & {isExistingPlayer?: boolean}>;
   completeProfileCreation: (params: {email: string; name: string; avatar: string; yearJoined: number | null}) => Promise<ActionResult>;
@@ -468,6 +469,31 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
     if (supabase) {setPlayers([]); setMatches([]); setTournaments([]); setWhitelist([]); setInviteCodes([]);}
     return success('Abgemeldet.');
   };
+  const deletePlayer = async (id: string): Promise<ActionResult> => {
+    if (!currentUser || !['owner', 'co_owner'].includes(currentUser.role)) {
+      return failure('Nur Owner und Co-Owner dürfen Spieler löschen.');
+    }
+    const target = stateRef.current.players.find((p) => p.id === id);
+    if (!target) return failure('Spieler nicht gefunden.');
+    if (id === currentUser.id || target.role === 'owner') {
+      return failure('Der eigene Account und Owner-Profile dürfen nicht gelöscht werden.');
+    }
+    if (supabase) return rpcAction('delete_player', {p_player_id: id}, 'Spieler gelöscht.');
+    if (stateRef.current.matches.some((m) => [...m.teamA, ...m.teamB, ...m.confirmedBy].includes(id)
+      || m.creatorId === id || m.disputedBy === id || m.disputeProposedBy === id || m.cancellationRequestedBy === id)
+      || stateRef.current.tournaments.some((t) => t.participants.includes(id) || t.winnerId === id
+        || t.teams?.some((team) => team.playerIds.includes(id))
+        || t.matches.some((m) => m.playerAId === id || m.playerBId === id || m.winnerId === id))) {
+      return failure('Spieler mit verknüpften Spielen oder Turnieren können nicht gelöscht werden.');
+    }
+    if (inviteCodes.some((code) => code.createdBy === id) || whitelist.some((entry) => entry.addedBy === id)) {
+      return failure('Spieler mit verknüpften Einladungscodes oder Whitelist-Einträgen können nicht gelöscht werden.');
+    }
+    const remaining = stateRef.current.players.filter((p) => p.id !== id);
+    stateRef.current = {...stateRef.current, players: remaining};
+    setPlayers(remaining);
+    return success('Spieler lokal gelöscht.');
+  };
   const createTournament = async (params: TournamentParams) => {
     if (!canManage) return failure('Nur Turnierleitung und Administration können Turniere erstellen.');
     if (supabase) {
@@ -514,7 +540,7 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
     submitMatch, confirmMatch, acknowledgeMatch, disputeMatch, proposeDisputeResolution,
     acceptDisputeResolution, cancelMatchByMutualAgreement, adminResolveDispute,
     checkWhitelistAndSendCode, verifyCode, completeProfileCreation, updatePlayerRole,
-    setPlayerSuspension, addWhitelistEntry, removeWhitelistEntry, createInviteCode,
+    setPlayerSuspension, deletePlayer, addWhitelistEntry, removeWhitelistEntry, createInviteCode,
     registerWithInvite, loginPlayer, logout, createTournament, advanceTournamentMatch, resetToDefaultData,
   }}>{children}</StoreContext.Provider>;
 }

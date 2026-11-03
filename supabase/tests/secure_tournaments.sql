@@ -9,6 +9,10 @@
 \ir ../migrations/20261101224000_application_rpc_aliases.sql
 \ir ../migrations/20261101225000_logic_consistency.sql
 \ir ../migrations/20261102123000_restrict_whitelist_check_rpc.sql
+\ir ../migrations/20261103180000_allow_owner_delete_players.sql
+\ir ../migrations/20261103183000_fix_unconditional_stats_delete.sql
+\ir ../migrations/20261103190000_repair_legacy_stats_deletes.sql
+\ir ../migrations/20261103200000_owner_co_owner_delete_players.sql
 
 CREATE FUNCTION public.test_assert(ok BOOLEAN,message TEXT) RETURNS VOID LANGUAGE plpgsql AS $$
 BEGIN IF ok IS DISTINCT FROM TRUE THEN RAISE EXCEPTION 'Assertion failed: %',message; END IF; END;

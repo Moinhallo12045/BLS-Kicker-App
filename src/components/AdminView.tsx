@@ -48,6 +48,7 @@ export function AdminView() {
     removeWhitelistEntry,
     updatePlayerRole,
     setPlayerSuspension,
+    deletePlayer,
   } = useStore();
 
   const [newCode, setNewCode] = useState('');
@@ -444,6 +445,10 @@ export function AdminView() {
           <Users className="w-5 h-5 text-amber-400" />
           Spieler-Rollen ({players.length} Spieler)
         </h3>
+        <p className="text-[11px] text-emerald-300/80">
+          Owner und Co-Owner können Spieler ohne verknüpfte Spiele oder Turniere löschen.
+          Der eigene Account und Owner-Profile sind geschützt.
+        </p>
 
         <div className="max-h-[28rem] overflow-y-auto overscroll-contain space-y-1.5 pr-1">
           {players.map((p) => {
@@ -452,6 +457,9 @@ export function AdminView() {
             const suspendable = canSuspend(currentUser, p);
             const roleKey = `role-${p.id}`;
             const suspendKey = `suspend-${p.id}`;
+            const deletable = ['owner', 'co_owner'].includes(currentUser.role)
+              && p.id !== currentUser.id && p.role !== 'owner';
+            const deleteKey = `delete-${p.id}`;
             return (
               <div
                 key={p.id}
@@ -516,6 +524,21 @@ export function AdminView() {
                     >
                       {busyKey === suspendKey && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                       {p.isSuspended ? 'Entsperren' : 'Sperren'}
+                    </button>
+                  )}
+                  {deletable && (
+                    <button
+                      type="button"
+                      disabled={Boolean(busyKey)}
+                      aria-label={`${p.name} löschen`}
+                      onClick={() => {
+                        if (!window.confirm(`${p.name} dauerhaft löschen? Diese Aktion kann nicht rückgängig gemacht werden.`)) return;
+                        void perform(deleteKey, () => deletePlayer(p.id), 'Spieler konnte nicht gelöscht werden.');
+                      }}
+                      className="min-h-[44px] rounded-lg px-3 text-[11px] font-bold flex items-center gap-1 bg-red-900/40 text-red-300 disabled:opacity-50"
+                    >
+                      {busyKey === deleteKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                      Löschen
                     </button>
                   )}
                 </div>
