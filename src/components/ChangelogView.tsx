@@ -5,6 +5,15 @@ import { ScrollText } from 'lucide-react';
 
 const RELEASES = [
   {
+    version: '1.1.3',
+    title: 'Profiländerungen zuverlässig speichern',
+    changes: [
+      'Speichern externer Profile ohne Uni-Jahrgang repariert, unabhängig von der Spielerrolle.',
+      'Name, Avatar und Beschreibung gelten erst nach bestätigter Speicherung als aktualisiert.',
+      'Ungültige Profildaten mit einem verständlichen Hinweis statt einer allgemeinen Fehlermeldung anzeigen.',
+    ],
+  },
+  {
     version: '1.1.2',
     title: 'Spielstatus auf einen Blick',
     changes: [
