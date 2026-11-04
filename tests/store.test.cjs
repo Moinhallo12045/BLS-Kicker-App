@@ -36,7 +36,7 @@ function builder(response) {
   return result;
 }
 function row(p) {
-  return {id:p.id,name:p.name,avatar:p.avatar,email:p.email,year_joined:p.yearJoined,
+  return {id:p.id,name:p.name,avatar:p.avatar,bio:p.bio||'',email:p.email,year_joined:p.yearJoined,
     is_external:p.isExternal ?? false,
     level:p.level,xp:p.xp,xp_next_level:p.xpNextLevel,elo_1v1:p.elo1v1,elo_2v2:p.elo2v2,
     elo_total:p.eloTotal,league_points:p.leaguePoints,wins_1v1:p.wins1v1,losses_1v1:p.losses1v1,
@@ -93,6 +93,7 @@ test('offline player deletion anonymizes historical players without changing res
     assert.equal(deleted.isDeleted,true);
     assert.equal(deleted.isSuspended,true);
     assert.equal(deleted.email,'');
+    assert.equal(deleted.bio,'');
     assert.match(deleted.name,/Gelöschter Spieler/);
     assert.equal(h.render().players.length,2);
     assert.equal(h.render().matches.length,data.matches.length);
@@ -187,7 +188,7 @@ test('connected state paginates public profiles without private identity columns
     rpc:()=>builder({data:data[0],error:null}),
     from:(table)=>{
       let start=0,end=249;const query=builder({data:[],error:null});
-      query.select=(columns)=>{if(table==='profiles')assert.ok(!columns.includes('email')&&!columns.includes('auth_user_id')&&columns.includes('is_external'));return query;};
+      query.select=(columns)=>{if(table==='profiles')assert.ok(!columns.includes('email')&&!columns.includes('auth_user_id')&&columns.includes('is_external')&&columns.includes('bio'));return query;};
       query.range=(a,b)=>{start=a;end=b;return query;};
       query.then=(resolve,reject)=>{
         if(table==='profiles')pages++;
@@ -253,6 +254,47 @@ test('server mutation failures are returned and do not fabricate local tournamen
   const h=harness(client);await h.hydrate();
   const result=await h.render().createTournament({name:'Doubles',description:'',mode:'2v2',type:'ko',teams:[]});
   assert.equal(result.success,false);assert.match(result.message,/keine Berechtigung/);assert.equal(h.render().tournaments.length,0);
+});
+test('players can update their own name and avatar locally with validation',async()=>{
+  const h=harness(null,{players:[player('actor'),player('other')],matches:[],tournaments:[],currentUserId:'actor'});
+  await h.hydrate();
+  assert.equal((await h.render().updateOwnProfile({name:'  New Name  ',avatar:'🦁',bio:'  Hier für den Spaß  '})).success,true);
+  assert.equal(h.render().currentUser.name,'New Name');
+  assert.equal(h.render().currentUser.avatar,'🦁');
+  assert.equal(h.render().currentUser.bio,'Hier für den Spaß');
+  assert.equal((await h.render().updateOwnProfile({name:'Other',avatar:'⚽',bio:''})).success,false);
+  assert.equal((await h.render().updateOwnProfile({name:'Valid',avatar:'not-an-avatar',bio:''})).success,false);
+  assert.equal((await h.render().updateOwnProfile({name:'Valid',avatar:'⚽',bio:'x'.repeat(161)})).success,false);
+  assert.equal(h.render().currentUser.name,'New Name');
+});
+test('connected profile updates use the own profile row and retain state on failure',async()=>{
+  for(const denied of [false,true]){
+    const own=row(player('actor')),calls=[];
+    const client={
+      auth:{getSession:async()=>({data:{session:{user:{id:'actor'}}},error:null}),
+        onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})},
+      rpc:(name)=>builder({data:own,error:null}),
+      from:(table)=>{
+        const query=builder({data:table==='profiles'?[own]:[],error:null});
+        query.update=(values)=>{calls.push({table,values});if(!denied){own.name=values.name;own.avatar=values.avatar;own.bio=values.bio;}return query;};
+        query.eq=(column,value)=>{calls.push({column,value});return builder({data:null,error:denied?{message:'Update denied'}:null});};
+        return query;
+      },
+    };
+    const h=harness(client);await h.hydrate();
+    const result=await h.render().updateOwnProfile({name:'New Name',avatar:'🦁',bio:'Here to play'});
+    assert.equal(result.success,!denied);
+    assert.equal(calls.length,2);
+    assert.equal(calls[0].table,'profiles');
+    assert.equal(calls[0].values.name,'New Name');
+    assert.equal(calls[0].values.avatar,'🦁');
+    assert.equal(calls[0].values.bio,'Here to play');
+    assert.equal(calls[1].column,'id');
+    assert.equal(calls[1].value,'actor');
+    assert.equal(h.render().currentUser.name,denied?'actor':'New Name');
+    assert.equal(h.render().currentUser.avatar,denied?'x':'🦁');
+    assert.equal(h.render().currentUser.bio||'',denied?'':'Here to play');
+  }
 });
 test('admin corrections use the correct RPC action and block duplicate concurrent writes',async()=>{
   const p=row(player('admin','admin'));

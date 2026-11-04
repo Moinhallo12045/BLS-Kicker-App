@@ -9,10 +9,11 @@ import { MAX_SCORE } from './elo';
 import type { Session } from '@supabase/supabase-js';
 import type { AuditEntry } from '@/types/audit';
 import { friendlyError } from './feedback';
+import { AVATAR_LIST } from './avatars';
 
 export interface ActionResult { success: boolean; message: string }
 interface ProfileRow {
-  id: string; name: string; avatar: string; email?: string; year_joined: number | null;
+  id: string; name: string; avatar: string; bio?: string; email?: string; year_joined: number | null;
   is_external: boolean;
   created_at?: string;
   level: number; xp: number; xp_next_level: number; elo_1v1: number; elo_2v2: number;
@@ -71,6 +72,7 @@ interface StoreContextType {
   loginPlayer: (nameOrEmail: string) => ActionResult;
   logout: () => Promise<ActionResult>;
   updatePlayerRole: (playerId: string, role: PlayerRole) => Promise<ActionResult>;
+  updateOwnProfile: (params: {name: string; avatar: string; bio: string}) => Promise<ActionResult>;
   setPlayerSuspension: (playerId: string, suspended: boolean) => Promise<ActionResult>;
   deletePlayer: (playerId: string) => Promise<ActionResult>;
   checkWhitelistAndSendCode: (email: string) => Promise<ActionResult & {isExistingPlayer?: boolean}>;
@@ -85,12 +87,12 @@ interface StoreContextType {
 }
 const StoreContext = createContext<StoreContextType | null>(null);
 const STORAGE_KEY = 'bls_kicker_app_state_v5';
-const PROFILE_COLUMNS = 'id,name,avatar,year_joined,is_external,level,xp,xp_next_level,elo_1v1,elo_2v2,elo_total,league_points,wins_1v1,losses_1v1,wins_2v2,losses_2v2,current_streak,best_rank,role,is_suspended,is_deleted,badges,elo_history,created_at,updated_at';
+const PROFILE_COLUMNS = 'id,name,avatar,bio,year_joined,is_external,level,xp,xp_next_level,elo_1v1,elo_2v2,elo_total,league_points,wins_1v1,losses_1v1,wins_2v2,losses_2v2,current_streak,best_rank,role,is_suspended,is_deleted,badges,elo_history,created_at,updated_at';
 const failure = (message: string): ActionResult => ({ success: false, message });
 const success = (message: string): ActionResult => ({ success: true, message });
 const errorMessage = friendlyError;
 const profileToPlayer = (p: ProfileRow): Player => ({
-  id: p.id, name: p.name, avatar: p.avatar || '⚽', email: p.email || '',
+  id: p.id, name: p.name, avatar: p.avatar || '⚽', bio: p.bio || '', email: p.email || '',
   createdAt: p.created_at,
   yearJoined: p.year_joined, isExternal: Boolean(p.is_external), level: p.level, xp: p.xp, xpNextLevel: p.xp_next_level,
   elo1v1: p.elo_1v1, elo2v2: p.elo_2v2, eloTotal: p.elo_total,
@@ -502,6 +504,32 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
     if (!target || (currentUser.role === 'co_owner' && (id === currentUser.id || target.role === 'owner' || role === 'owner'))) return failure('Diese Rollenänderung ist nicht erlaubt.');
     setPlayers((prev) => prev.map((p) => p.id === id ? {...p, role} : p)); return success('Rolle aktualisiert.');
   };
+  const updateOwnProfile: StoreContextType['updateOwnProfile'] = async ({name, avatar, bio}) => {
+    if (!currentUser || currentUser.isDeleted) return failure('Bitte melde dich mit einem aktiven Spielerprofil an.');
+    const normalizedName = name.trim();
+    if (!normalizedName || normalizedName.length > 40) return failure('Der Name muss zwischen 1 und 40 Zeichen lang sein.');
+    const normalizedBio = bio.trim();
+    if (normalizedBio.length > 160) return failure('Die Beschreibung darf höchstens 160 Zeichen lang sein.');
+    if (!AVATAR_LIST.includes(avatar)) return failure('Bitte wähle einen gültigen Avatar aus.');
+    if (players.some((p) => p.id !== currentUser.id && p.name.trim().toLowerCase() === normalizedName.toLowerCase())) {
+      return failure('Dieser Spielername wird bereits verwendet.');
+    }
+    if (mutationRef.current) return failure('Eine Änderung wird bereits gespeichert. Bitte kurz warten.');
+    if (supabase) {
+      mutationRef.current = true;
+      try {
+        const {error} = await supabase.from('profiles').update({name: normalizedName, avatar, bio: normalizedBio}).eq('id', currentUser.id);
+        if (error) { console.error('Profiländerung fehlgeschlagen:', error); return failure(friendlyError(error)); }
+        await refreshState();
+        return success('Profil aktualisiert.');
+      } catch (error) {
+        console.error('Profiländerung fehlgeschlagen:', error);
+        return failure(errorMessage(error));
+      } finally { mutationRef.current = false; }
+    }
+    setPlayers((prev) => prev.map((p) => p.id === currentUser.id ? {...p, name: normalizedName, avatar, bio: normalizedBio} : p));
+    return success('Profil aktualisiert.');
+  };
   const setPlayerSuspension = async (id: string, suspended: boolean) => {
     if (players.find((p) => p.id === id)?.isDeleted) return failure('Gelöschte Spieler können nicht reaktiviert werden.');
     if (supabase) return rpcAction('set_player_suspension', {p_player_id: id, p_suspended: suspended}, 'Sperrstatus aktualisiert.');
@@ -543,7 +571,7 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
     if (target.isDeleted) return success('Spieler bereits gelöscht.');
     const remaining = stateRef.current.players.map((p): Player => p.id === id
       ? {...p, isDeleted: true, isSuspended: true, role: 'player', name: `Gelöschter Spieler ${id}`,
-        avatar: '⚽', email: '', yearJoined: null, isExternal: false}
+        avatar: '⚽', bio: '', email: '', yearJoined: null, isExternal: false}
       : p);
     stateRef.current = {...stateRef.current, players: remaining};
     setPlayers(remaining);
@@ -609,7 +637,7 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
     switchUser: (id) => {if (!supabase) setCurrentUserId(id);},
     submitMatch, confirmMatch, acknowledgeMatch, disputeMatch, proposeDisputeResolution,
     acceptDisputeResolution, cancelMatchByMutualAgreement, adminResolveDispute,
-    checkWhitelistAndSendCode, verifyCode, completeProfileCreation, updatePlayerRole,
+    checkWhitelistAndSendCode, verifyCode, completeProfileCreation, updatePlayerRole, updateOwnProfile,
     setPlayerSuspension, deletePlayer, addWhitelistEntry, removeWhitelistEntry, createInviteCode,
     registerWithInvite, loginPlayer, logout, createTournament, advanceTournamentMatch, resetToDefaultData,
   }}>{children}</StoreContext.Provider>;

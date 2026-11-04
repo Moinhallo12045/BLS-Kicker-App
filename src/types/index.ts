@@ -5,6 +5,7 @@ export interface Player {
   createdAt?: string;
   name: string;
   avatar: string;
+  bio?: string;
   email: string;
   yearJoined: number | null;
   isExternal?: boolean;

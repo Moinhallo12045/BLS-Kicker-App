@@ -5,16 +5,23 @@ import { useStore } from '@/lib/store';
 import { ExternalLabel } from './ExternalLabel';
 import { ALL_BADGES } from '@/lib/badges';
 import { getTierForLevel } from '@/lib/levels';
-import { Award, Flame, RefreshCw, LogOut, Loader2 } from 'lucide-react';
+import { Award, Flame, RefreshCw, LogOut, Loader2, Pencil, Save, X } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { MAX_LEVEL, MIN_RANKED_GAMES, formatBestRank, gamesPlayed, getLeagueRank, runAction } from '@/lib/matchViews';
+import { AVATAR_LIST } from '@/lib/avatars';
 
 export function ProfileView({ playerId }: { playerId?: string }) {
-  const { currentUser: signedInUser, players, resetToDefaultData, logout } = useStore();
+  const { currentUser: signedInUser, players, resetToDefaultData, logout, updateOwnProfile } = useStore();
   const currentUser = playerId ? players.find((player) => player.id === playerId) : signedInUser;
   const isOwnAccount = !playerId;
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileName, setProfileName] = useState('');
+  const [profileAvatar, setProfileAvatar] = useState('⚽');
+  const [profileBio, setProfileBio] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   if (!currentUser) return null;
 
@@ -33,6 +40,18 @@ export function ProfileView({ playerId }: { playerId?: string }) {
       setLogoutError(result.message);
       setLoggingOut(false);
     }
+  };
+  const handleProfileSave = async () => {
+    if (savingProfile) return;
+    setSavingProfile(true);
+    setProfileError(null);
+    const result = await runAction(
+      () => updateOwnProfile({name: profileName, avatar: profileAvatar, bio: profileBio}),
+      {fallbackError: 'Profil konnte nicht gespeichert werden.'},
+    );
+    if (result.success) setEditingProfile(false);
+    else setProfileError(result.message);
+    setSavingProfile(false);
   };
   const tier = getTierForLevel(currentUser.level);
   const roleLabel = {
@@ -82,8 +101,23 @@ export function ProfileView({ playerId }: { playerId?: string }) {
             <p className="text-xs text-emerald-300/80 mt-0.5">
               {tier.tier} • {currentUser.isExternal ? <ExternalLabel /> : `Uni-Jahrgang ${currentUser.yearJoined}`} • ID: #{currentUser.id.slice(-6)}
             </p>
+            {currentUser.bio && <p className="mt-2 text-sm text-stone-200 whitespace-pre-wrap break-words">{currentUser.bio}</p>}
 
-            {isOwnAccount && <div className="mt-3 flex items-center justify-center sm:justify-start gap-2 flex-wrap">
+            {isOwnAccount && !editingProfile && <div className="mt-3 flex items-center justify-center sm:justify-start gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => {
+                  setProfileName(currentUser.name);
+                  setProfileAvatar(currentUser.avatar);
+                  setProfileBio(currentUser.bio || '');
+                  setProfileError(null);
+                  setEditingProfile(true);
+                }}
+                className="min-h-[44px] px-3 rounded-lg bg-emerald-950/60 hover:bg-emerald-900/70 border border-emerald-700/50 text-xs font-semibold text-emerald-200 flex items-center gap-1.5 transition-colors"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                Profil bearbeiten
+              </button>
               <button
                 type="button"
                 onClick={handleLogout}
@@ -94,6 +128,74 @@ export function ProfileView({ playerId }: { playerId?: string }) {
                 {loggingOut ? 'Wird abgemeldet…' : 'Abmelden'}
               </button>
             </div>}
+            {isOwnAccount && editingProfile && (
+              <div className="mt-3 space-y-3">
+                <label className="block text-left text-xs font-bold text-emerald-200">
+                  Spielername
+                  <input
+                    value={profileName}
+                    onChange={(event) => setProfileName(event.target.value)}
+                    maxLength={40}
+                    autoComplete="nickname"
+                    className="mt-1.5 w-full min-h-[44px] rounded-lg border border-emerald-800 bg-[#081a10] px-3 text-sm text-white"
+                  />
+                </label>
+                <label className="block text-left text-xs font-bold text-emerald-200">
+                  Über mich <span className="font-normal text-emerald-400/70">(optional, max. 160 Zeichen)</span>
+                  <textarea
+                    value={profileBio}
+                    onChange={(event) => setProfileBio(event.target.value)}
+                    maxLength={160}
+                    rows={3}
+                    className="mt-1.5 w-full resize-y rounded-lg border border-emerald-800 bg-[#081a10] px-3 py-2 text-sm text-white"
+                  />
+                </label>
+                <div>
+                  <p className="text-left text-xs font-bold text-emerald-200 mb-1.5">Avatar auswählen</p>
+                  <div className="grid grid-cols-6 sm:grid-cols-9 gap-1.5 p-2 rounded-xl bg-[#081a10] border border-emerald-900/60">
+                    {AVATAR_LIST.map((avatar) => (
+                      <button
+                        key={avatar}
+                        type="button"
+                        onClick={() => setProfileAvatar(avatar)}
+                        aria-label={`Avatar ${avatar}`}
+                        aria-pressed={profileAvatar === avatar}
+                        className={`h-10 rounded-lg text-lg flex items-center justify-center transition-all ${
+                          profileAvatar === avatar ? 'bg-amber-400 text-stone-950 shadow' : 'hover:bg-emerald-950/60 text-white'
+                        }`}
+                      >
+                        {avatar}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex justify-center sm:justify-start gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleProfileSave()}
+                    disabled={savingProfile}
+                    className="min-h-[44px] px-3 rounded-lg disabled:opacity-60 bg-emerald-700 hover:bg-emerald-600 text-xs font-semibold text-white flex items-center gap-1.5"
+                  >
+                    {savingProfile ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    {savingProfile ? 'Wird gespeichert…' : 'Speichern'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {setEditingProfile(false); setProfileError(null);}}
+                    disabled={savingProfile}
+                    className="min-h-[44px] px-3 rounded-lg disabled:opacity-60 bg-stone-800 hover:bg-stone-700 text-xs font-semibold text-stone-200 flex items-center gap-1.5"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    Abbrechen
+                  </button>
+                </div>
+                {profileError && (
+                  <p role="alert" className="text-left text-xs text-red-300 bg-red-950/60 border border-red-700/50 rounded-lg px-2 py-1.5">
+                    {profileError}
+                  </p>
+                )}
+              </div>
+            )}
             {logoutError && (
               <p role="alert" className="mt-2 text-xs text-red-300 bg-red-950/60 border border-red-700/50 rounded-lg px-2 py-1.5">
                 {logoutError}
