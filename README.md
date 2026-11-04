@@ -65,7 +65,7 @@ Eine moderne, hochwertige und mobiloptimierte Web-App (PWA) für geschlossene Ti
 
 Die untere Leiste ist auf Smartphone und Desktop die zentrale Bereichsnavigation:
 **Start · Rangliste · + Spiel · Spiele · Mehr**. Unter **Mehr** liegen Spieler,
-Turniere, Mein Profil, **Funktionen** und (mit passenden Rechten) Verwaltung.
+Turniere, Mein Profil, **Funktionen**, **Changelog** und (mit passenden Rechten) Verwaltung.
 Die Funktionen-Ansicht fasst die wichtigsten Bereiche der Liga direkt in der App
 zusammen. Die Glocke im Kopfbereich öffnet weiterhin neue Ergebnisse und
 Klärungsanfragen.

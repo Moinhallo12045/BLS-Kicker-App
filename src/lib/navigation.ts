@@ -1,4 +1,4 @@
-export const TABS = ['dashboard', 'ranking', 'matches', 'tournaments', 'players', 'profile', 'features', 'admin'] as const;
+export const TABS = ['dashboard', 'ranking', 'matches', 'tournaments', 'players', 'profile', 'features', 'changelog', 'admin'] as const;
 export type TabType = typeof TABS[number];
 export const RANKING_FILTERS = ['elo', 'krabbler', 'wochen', 'level', 'aktiv', '1v1', '2v2', 'monat', 'turnier', 'historie'] as const;
 export type RankingFilter = typeof RANKING_FILTERS[number];

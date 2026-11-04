@@ -19,8 +19,7 @@ import {
   Ban,
 } from 'lucide-react';
 import { runAction } from '@/lib/matchViews';
-
-const AVATAR_LIST = ['⚽', '🎯', '🦁', '👑', '🔥', '⚡', '🦅', '🎱', '🚀', '⚔️', '🎲', '⚓'];
+import { AVATAR_LIST } from '@/lib/avatars';
 
 type AuthStep = 'checking' | 'email' | 'verify' | 'profile' | 'loadingProfile' | 'suspended';
 

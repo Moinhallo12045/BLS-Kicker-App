@@ -4,6 +4,8 @@ SELECT set_config('app.server_operation','true',true);
 INSERT INTO auth.users VALUES('00000000-0000-0000-0000-000000000021');
 INSERT INTO public.profiles(id,auth_user_id,name,role) VALUES
   ('00000000-0000-0000-0000-000000000020','00000000-0000-0000-0000-000000000021','History co-owner','co_owner');
+UPDATE public.profiles SET bio='Private test bio'
+  WHERE id='00000000-0000-0000-0000-000000000006';
 SELECT set_config('app.server_operation','',true);
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000009',true);
 SET LOCAL ROLE authenticated;
@@ -38,7 +40,7 @@ SELECT public.test_denied($q$SELECT public.submit_match_result('1v1',
   ARRAY['00000000-0000-0000-0000-000000000006']::UUID[],10,5)$q$);
 RESET ROLE;
 SELECT public.test_assert(bool_and(is_deleted AND is_suspended AND auth_user_id IS NULL
-  AND role='player' AND email IS NULL AND year_joined IS NULL AND name LIKE 'Gelöschter Spieler %'),
+  AND role='player' AND email IS NULL AND bio='' AND year_joined IS NULL AND name LIKE 'Gelöschter Spieler %'),
   'historical profiles are anonymized and inactive')
 FROM public.profiles WHERE id IN
   ('00000000-0000-0000-0000-000000000006','00000000-0000-0000-0000-000000000001');

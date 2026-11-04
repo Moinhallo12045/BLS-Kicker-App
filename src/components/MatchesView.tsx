@@ -14,13 +14,13 @@ import {
 import { Swords, CheckCircle2, Clock, AlertTriangle, Ban, Crown, Loader2, AlertCircle } from 'lucide-react';
 import { PlayerLink, useAppNavigation } from './AppNavigation';
 import { DEFAULT_MATCH_FILTERS, filterMatches } from '@/lib/matchFilters';
+import { getMatchCardTone } from '@/lib/matchCardTone';
 
 type Feedback = { text: string; error: boolean };
 
 const STATUS_FILTERS: { id: 'all' | MatchStatus; label: string }[] = [
   { id: 'all', label: 'Alle Status' },
   { id: 'confirmed', label: 'Bestätigt' },
-  { id: 'pending', label: 'Wirksam' },
   { id: 'disputed', label: 'Strittig' },
   { id: 'cancelled', label: 'Annulliert' },
 ];
@@ -55,7 +55,7 @@ function StatusBadge({ match }: { match: Match }) {
   return (
     <span className={`${base} bg-amber-500/20 text-amber-400 border-amber-500/30`}>
       <Clock className="w-3 h-3" />
-      {counted ? 'Wirksam · Widerspruch möglich' : 'Ausstehend'}
+      {counted ? 'Gewertet · Widerspruch möglich' : 'Ausstehend'}
     </span>
   );
 }
@@ -192,15 +192,7 @@ export function MatchesView({ onOpenMatchEntry, matchId, playerId }: { onOpenMat
             return (
               <div
                 key={m.id}
-                className={`felt-card p-3.5 sm:p-4 transition-all relative overflow-hidden ${
-                  m.status === 'disputed'
-                    ? 'border-red-600/50 bg-red-950/20'
-                    : isCancelled
-                    ? 'opacity-70'
-                    : m.status === 'pending'
-                    ? 'border-amber-600/40 bg-amber-950/10'
-                    : 'border-emerald-800/40'
-                }`}
+                className={`felt-card ${getMatchCardTone(m)} p-3.5 sm:p-4 transition-all relative overflow-hidden`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11px] mb-3 border-b border-emerald-900/30 pb-2">
                   <div className="flex flex-wrap items-center gap-1.5">

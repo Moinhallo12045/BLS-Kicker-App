@@ -48,6 +48,26 @@
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
+.felt-card.match-card-confirmed {
+  background: linear-gradient(180deg, rgba(6, 78, 42, 0.62) 0%, rgba(5, 46, 28, 0.82) 100%);
+  border-color: rgba(52, 211, 153, 0.55);
+}
+
+.felt-card.match-card-problem {
+  background: linear-gradient(180deg, rgba(127, 29, 29, 0.58) 0%, rgba(69, 10, 10, 0.78) 100%);
+  border-color: rgba(248, 113, 113, 0.58);
+}
+
+.felt-card.match-card-cancelled {
+  background: linear-gradient(180deg, rgba(68, 64, 60, 0.62) 0%, rgba(41, 37, 36, 0.82) 100%);
+  border-color: rgba(168, 162, 158, 0.5);
+}
+
+.felt-card.match-card-pending {
+  background: linear-gradient(180deg, rgba(120, 53, 15, 0.34) 0%, rgba(69, 26, 3, 0.5) 100%);
+  border-color: rgba(245, 158, 11, 0.42);
+}
+
 .felt-card-highlight {
   background: linear-gradient(180deg, rgba(22, 63, 42, 0.95) 0%, rgba(13, 38, 25, 0.98) 100%);
   border: 1px solid rgba(34, 197, 94, 0.45);

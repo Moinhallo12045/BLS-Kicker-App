@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const {loadTypeScript,player} = require('./load-typescript.cjs');
 const {friendlyError} = loadTypeScript('src/lib/feedback.ts');
 const {suggestedPlayers} = loadTypeScript('src/lib/playerSuggestions.ts');
+const {getMatchCardTone} = loadTypeScript('src/lib/matchCardTone.ts');
 
 test('backend errors become explanations without raw SQL details',()=>{
   assert.match(friendlyError({message:'DELETE requires a WHERE clause'}),/Schutz der Daten/);
@@ -32,6 +33,14 @@ test('suggestions distinguish partners/opponents and prioritize recent play dete
     ['partner','new','old','unused']);
   assert.deepEqual(Array.from(suggestedPlayers([...players].reverse(),[...matches].reverse(),'me',false),e=>e.player.id),
     Array.from(opponents,e=>e.player.id));
+});
+test('match card colors reflect confirmation, problems and cancellation states',()=>{
+  const base={status:'pending'};
+  assert.equal(getMatchCardTone({...base,status:'confirmed'}),'match-card-confirmed');
+  assert.equal(getMatchCardTone({...base,status:'disputed'}),'match-card-problem');
+  assert.equal(getMatchCardTone({...base,cancellationRequestedBy:'opponent'}),'match-card-problem');
+  assert.equal(getMatchCardTone({...base,status:'cancelled',cancellationRequestedBy:undefined}),'match-card-cancelled');
+  assert.equal(getMatchCardTone(base),'match-card-pending');
 });
 function component(file,store) {
   const elements=[];

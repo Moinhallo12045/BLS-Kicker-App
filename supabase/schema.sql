@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     auth_user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     name TEXT NOT NULL UNIQUE,
     avatar TEXT DEFAULT '⚽',
+    bio TEXT NOT NULL DEFAULT '',
     email TEXT,
     year_joined INT DEFAULT EXTRACT(YEAR FROM CURRENT_DATE),
     is_external BOOLEAN NOT NULL DEFAULT FALSE,
@@ -405,6 +406,9 @@ BEGIN
     THEN
       RAISE EXCEPTION 'Profile statistics and authorization fields are server-managed';
     END IF;
+  END IF;
+  IF NEW.bio IS NULL OR length(NEW.bio) > 160 THEN
+    RAISE EXCEPTION 'Profile description must be 160 characters or fewer';
   END IF;
   RETURN NEW;
 END;

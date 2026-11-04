@@ -10,6 +10,7 @@ import { TournamentView } from '@/components/TournamentView';
 import { PlayersView } from '@/components/PlayersView';
 import { ProfileView } from '@/components/ProfileView';
 import { FeaturesView } from '@/components/FeaturesView';
+import { ChangelogView } from '@/components/ChangelogView';
 import { AdminView } from '@/components/AdminView';
 import { MatchEntryModal } from '@/components/MatchEntryModal';
 import { ConfirmationDrawer } from '@/components/ConfirmationDrawer';
@@ -132,6 +133,7 @@ function AppContent() {
           <div hidden={activeTab !== 'players'}><PlayersView /></div>
           <div hidden={activeTab !== 'profile'}><ProfileView /></div>
           <div hidden={activeTab !== 'features'}><FeaturesView /></div>
+          <div hidden={activeTab !== 'changelog'}><ChangelogView /></div>
           {activeTab === 'admin' && isAdmin && <AdminView />}
         </div>
         {location.playerId && <PlayerDetailView key={location.playerId} playerId={location.playerId} onOpenMatchEntry={() => setIsMatchEntryOpen(true)} />}
