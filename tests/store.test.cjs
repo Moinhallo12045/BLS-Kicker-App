@@ -268,7 +268,7 @@ test('players can update their own name and avatar locally with validation',asyn
   assert.equal(h.render().currentUser.name,'New Name');
 });
 test('connected profile updates use the own profile row and retain state on failure',async()=>{
-  for(const denied of [false,true]){
+  for(const outcome of ['success','denied','missing']){
     const own=row(player('actor')),calls=[];
     const client={
       auth:{getSession:async()=>({data:{session:{user:{id:'actor'}}},error:null}),
@@ -276,14 +276,18 @@ test('connected profile updates use the own profile row and retain state on fail
       rpc:(name)=>builder({data:own,error:null}),
       from:(table)=>{
         const query=builder({data:table==='profiles'?[own]:[],error:null});
-        query.update=(values)=>{calls.push({table,values});if(!denied){own.name=values.name;own.avatar=values.avatar;own.bio=values.bio;}return query;};
-        query.eq=(column,value)=>{calls.push({column,value});return builder({data:null,error:denied?{message:'Update denied'}:null});};
+        query.update=(values)=>{calls.push({table,values});if(outcome==='success'){own.name=values.name;own.avatar=values.avatar;own.bio=values.bio;}return query;};
+        query.eq=(column,value)=>{calls.push({column,value});return builder({
+          data:outcome==='success'?{id:'actor'}:null,
+          error:outcome==='denied'?{message:'Update denied'}:null,
+        });};
         return query;
       },
     };
     const h=harness(client);await h.hydrate();
     const result=await h.render().updateOwnProfile({name:'New Name',avatar:'🦁',bio:'Here to play'});
-    assert.equal(result.success,!denied);
+    assert.equal(result.success,outcome==='success');
+    if(outcome==='missing') assert.match(result.message,/nicht gespeichert/);
     assert.equal(calls.length,2);
     assert.equal(calls[0].table,'profiles');
     assert.equal(calls[0].values.name,'New Name');
@@ -291,9 +295,9 @@ test('connected profile updates use the own profile row and retain state on fail
     assert.equal(calls[0].values.bio,'Here to play');
     assert.equal(calls[1].column,'id');
     assert.equal(calls[1].value,'actor');
-    assert.equal(h.render().currentUser.name,denied?'actor':'New Name');
-    assert.equal(h.render().currentUser.avatar,denied?'x':'🦁');
-    assert.equal(h.render().currentUser.bio||'',denied?'':'Here to play');
+    assert.equal(h.render().currentUser.name,outcome==='success'?'New Name':'actor');
+    assert.equal(h.render().currentUser.avatar,outcome==='success'?'🦁':'x');
+    assert.equal(h.render().currentUser.bio||'',outcome==='success'?'Here to play':'');
   }
 });
 test('admin corrections use the correct RPC action and block duplicate concurrent writes',async()=>{

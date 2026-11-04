@@ -10,6 +10,7 @@ test('backend errors become explanations without raw SQL details',()=>{
   assert.match(friendlyError(new Error('Failed to fetch')),/Internetverbindung/);
   assert.match(friendlyError({message:'permission denied for table profiles'}),/keine Berechtigung/);
   assert.match(friendlyError({message:'JWT expired'}),/erneut anmelden/);
+  assert.match(friendlyError({message:'Invalid player details'}),/Profildaten sind ungültig/);
   assert.match(friendlyError('violates foreign key constraint'),/verknüpft/);
   assert.equal(friendlyError('syntax error at or near secret_table','Speichern fehlgeschlagen.'),'Speichern fehlgeschlagen.');
   assert.equal(friendlyError('Der eigene Account und Owner-Profile dürfen nicht gelöscht werden.'),

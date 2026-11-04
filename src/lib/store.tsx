@@ -518,8 +518,10 @@ export function StoreProvider({ children }: {children: React.ReactNode}) {
     if (supabase) {
       mutationRef.current = true;
       try {
-        const {error} = await supabase.from('profiles').update({name: normalizedName, avatar, bio: normalizedBio}).eq('id', currentUser.id);
+        const {data, error} = await supabase.from('profiles').update({name: normalizedName, avatar, bio: normalizedBio})
+          .eq('id', currentUser.id).select('id').maybeSingle();
         if (error) { console.error('Profiländerung fehlgeschlagen:', error); return failure(friendlyError(error)); }
+        if (!data) return failure('Profil wurde nicht gespeichert. Bitte melde dich erneut an und versuche es noch einmal.');
         await refreshState();
         return success('Profil aktualisiert.');
       } catch (error) {

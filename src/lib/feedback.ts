@@ -21,6 +21,7 @@ export function friendlyError(error: unknown, fallback = 'Die Anfrage ist fehlge
   if (/duplicate key|unique constraint/i.test(message)) return 'Dieser Eintrag existiert bereits. Bitte die Daten aktualisieren.';
   if (/foreign key/i.test(message)) return 'Der Eintrag ist noch mit anderen Daten verknüpft und kann nicht entfernt werden.';
   if (/timeout|timed out|canceling statement/i.test(message)) return 'Der Server antwortet zu langsam. Bitte kurz warten und erneut versuchen.';
+  if (/invalid player details/i.test(message)) return 'Die Profildaten sind ungültig. Bitte die Administration kontaktieren.';
   if (/invalid.*score|invalid.*match|invalid.*dispute/i.test(message)) return 'Die Spielangaben sind ungültig. Bitte Spieler und Ergebnis prüfen.';
   if (/^[A-ZÄÖÜ][^;\n]*[.!?]?$/.test(message) && /[äöüß]|\b(Bitte|Spieler|Spiel|Profil|Die|Der|Dein|Diese|Keine|Nicht|Ungültig|Nur|Eintrag|Rolle|Code|Gelöschte)\b/.test(message)) {
     return message;
